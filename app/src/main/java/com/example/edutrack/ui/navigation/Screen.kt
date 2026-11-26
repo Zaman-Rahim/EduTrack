@@ -10,7 +10,29 @@ sealed class Screen(val route: String) {
         fun createRoute(subjectId: Long = -1L): String = "history?subjectId=$subjectId"
     }
     data object Subjects : Screen("subjects")
+    data object Reminders : Screen("reminders")
     data object Stats : Screen("stats")
+
+    data object AddEditSubject : Screen("add_edit_subject?subjectId={subjectId}") {
+        const val ARG_SUBJECT_ID = "subjectId"
+        fun createRoute(subjectId: Long = -1L): String = "add_edit_subject?subjectId=$subjectId"
+    }
+
+    data object FocusTimer : Screen("focus_timer")
+
+    data object AddEditReminder : Screen("add_edit_reminder?reminderId={reminderId}") {
+        const val ARG_REMINDER_ID = "reminderId"
+        fun createRoute(reminderId: Long = -1L): String = "add_edit_reminder?reminderId=$reminderId"
+    }
+
+    data object ReminderDetail : Screen("reminder_detail/{reminderId}") {
+        const val ARG_REMINDER_ID = "reminderId"
+        fun createRoute(reminderId: Long): String = "reminder_detail/$reminderId"
+    }
+
+    data object Notifications : Screen("notifications")
+    data object Me : Screen("me")
+
     data object AddEditSession : Screen("add_edit_session?sessionId={sessionId}&subjectId={subjectId}") {
         const val ARG_SESSION_ID = "sessionId"
         const val ARG_SUBJECT_ID = "subjectId"

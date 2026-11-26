@@ -38,6 +38,7 @@ import com.example.edutrack.R
 import com.example.edutrack.ui.components.EmptyStateCard
 import com.example.edutrack.ui.components.StudyBarChart
 import com.example.edutrack.ui.components.SubjectColorDot
+import com.example.edutrack.ui.components.TopRightHeaderButtons
 import com.example.edutrack.ui.theme.ForestGreenDark
 import com.example.edutrack.ui.theme.ForestGreenPrimary
 import com.example.edutrack.ui.theme.LimeAccent
@@ -50,6 +51,9 @@ import java.util.Locale
 @Composable
 fun StatsScreen(
     uiState: StatsUiState,
+    unreadNotificationsCount: Int,
+    onNotificationsClick: () -> Unit,
+    onMeClick: () -> Unit,
     onLogSessionClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -63,18 +67,29 @@ fun StatsScreen(
     ) {
         // Exact Figma Header
         item {
-            Column {
-                Text(
-                    text = "Your progress",
-                    style = MaterialTheme.typography.headlineMedium.copy(fontSize = 28.sp),
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "Look how far your focus has taken you.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Your progress",
+                        style = MaterialTheme.typography.headlineMedium.copy(fontSize = 28.sp),
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Look how far your focus has taken you.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                TopRightHeaderButtons(
+                    unreadNotificationsCount = unreadNotificationsCount,
+                    onNotificationsClick = onNotificationsClick,
+                    onMeClick = onMeClick
                 )
             }
         }

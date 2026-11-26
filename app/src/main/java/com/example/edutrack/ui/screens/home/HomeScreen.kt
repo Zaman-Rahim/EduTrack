@@ -22,8 +22,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.AutoGraph
-import androidx.compose.material.icons.outlined.DarkMode
-import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -49,6 +47,8 @@ import androidx.compose.ui.unit.sp
 import com.example.edutrack.R
 import com.example.edutrack.ui.components.EmptyStateCard
 import com.example.edutrack.ui.components.SessionListCard
+import com.example.edutrack.ui.components.TopRightHeaderButtons
+import com.example.edutrack.ui.components.bounceClick
 import com.example.edutrack.ui.components.figmaSubjectIconRes
 import com.example.edutrack.ui.theme.ForestGreenDark
 import com.example.edutrack.ui.theme.ForestGreenPrimary
@@ -63,9 +63,10 @@ import java.util.Locale
 @Composable
 fun HomeScreen(
     uiState: HomeUiState,
-    isDarkTheme: Boolean,
-    onToggleTheme: () -> Unit,
-    onNotificationClick: () -> Unit,
+    unreadNotificationsCount: Int,
+    onNotificationsClick: () -> Unit,
+    onMeClick: () -> Unit,
+    onAddFirstSubjectClick: () -> Unit,
     onAddSessionClick: () -> Unit,
     onQuickAddForSubject: (Long) -> Unit,
     onSubjectClick: (Long) -> Unit,
@@ -74,6 +75,10 @@ fun HomeScreen(
     onViewAllHistoryClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val isBrandNewUser = !uiState.isLoading &&
+        uiState.subjectSummaries.isEmpty() &&
+        uiState.recentSessions.isEmpty()
+
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 28.dp),
@@ -82,10 +87,20 @@ fun HomeScreen(
         // Exact Figma Header
         item {
             HomeHeaderSection(
-                isDarkTheme = isDarkTheme,
-                onToggleTheme = onToggleTheme,
-                onNotificationClick = onNotificationClick
+                unreadNotificationsCount = unreadNotificationsCount,
+                onNotificationsClick = onNotificationsClick,
+                onMeClick = onMeClick
             )
+        }
+
+        if (isBrandNewUser) {
+            item {
+                FirstStudyPlanCard(
+                    onAddSubjectClick = onAddFirstSubjectClick,
+                    onLogSessionClick = onAddSessionClick
+                )
+            }
+            return@LazyColumn
         }
 
         // Exact Figma Hero Focus Card
@@ -147,7 +162,8 @@ fun HomeScreen(
                 onClick = onAddSessionClick,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(56.dp),
+                    .height(56.dp)
+                    .bounceClick(onClick = onAddSessionClick),
                 shape = RoundedCornerShape(18.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = ForestGreenPrimary,
@@ -215,16 +231,16 @@ fun HomeScreen(
 
 @Composable
 private fun HomeHeaderSection(
-    isDarkTheme: Boolean,
-    onToggleTheme: () -> Unit,
-    onNotificationClick: () -> Unit
+    unreadNotificationsCount: Int,
+    onNotificationsClick: () -> Unit,
+    onMeClick: () -> Unit
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.Top
     ) {
-        Column {
+        Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = DateTimeUtils.formatFullDate(DateTimeUtils.todayEpochDay()).uppercase(Locale.getDefault()),
                 style = MaterialTheme.typography.labelSmall,
@@ -243,40 +259,117 @@ private fun HomeHeaderSection(
                 color = MaterialTheme.colorScheme.onBackground
             )
         }
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
+        TopRightHeaderButtons(
+            unreadNotificationsCount = unreadNotificationsCount,
+            onNotificationsClick = onNotificationsClick,
+            onMeClick = onMeClick,
             modifier = Modifier.padding(top = 8.dp)
+        )
+    }
+}
+
+@Composable
+private fun FirstStudyPlanCard(
+    onAddSubjectClick: () -> Unit,
+    onLogSessionClick: () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(26.dp),
+            colors = CardDefaults.cardColors(containerColor = ForestGreenPrimary),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
         ) {
-            Box(
+            Column(
                 modifier = Modifier
-                    .size(42.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surface)
-                    .clickable(onClick = onToggleTheme),
-                contentAlignment = Alignment.Center
+                    .fillMaxWidth()
+                    .padding(24.dp)
             ) {
-                Icon(
-                    imageVector = if (isDarkTheme) Icons.Outlined.LightMode else Icons.Outlined.DarkMode,
-                    contentDescription = if (isDarkTheme) "Light mode" else "Dark mode",
-                    tint = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.size(20.dp)
+                Surface(
+                    shape = RoundedCornerShape(999.dp),
+                    color = LimeAccent
+                ) {
+                    Text(
+                        text = "FRESH START",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = ForestGreenDark,
+                        letterSpacing = 0.8.sp,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = "Build your first\ndaily study plan",
+                    style = MaterialTheme.typography.headlineSmall.copy(lineHeight = 32.sp),
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.White
                 )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Add the subjects you want to focus on, pick your daily minutes and repeat days, and count down live.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color(0xFFD3E0D5)
+                )
+                Spacer(modifier = Modifier.height(20.dp))
+                Button(
+                    onClick = onAddSubjectClick,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp)
+                        .bounceClick(onClick = onAddSubjectClick),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = LimeAccent,
+                        contentColor = ForestGreenDark
+                    )
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_figma_plus),
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = "Add your first subject",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
             }
-            Box(
+        }
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(22.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+        ) {
+            Column(
                 modifier = Modifier
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surface)
-                    .clickable(onClick = onNotificationClick),
-                contentAlignment = Alignment.Center
+                    .fillMaxWidth()
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Icon(
-                    painter = painterResource(id = R.drawable.ic_figma_bell),
-                    contentDescription = "Notifications",
-                    tint = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.size(24.dp)
+                Text(
+                    text = "How EduTrack works",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
+                Text(
+                    text = "1. Add subjects with daily target minutes and weekly repeat days.\n2. Tap a subject in Today's To-Do to start the live countdown timer.\n3. When the timer hits 00:00, it auto-saves your session and moves to Completed.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    lineHeight = 20.sp
+                )
+                TextButton(onClick = onLogSessionClick) {
+                    Text(
+                        text = "Or log a past session manually",
+                        color = ForestGreenPrimary,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
             }
         }
     }

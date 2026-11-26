@@ -4,22 +4,17 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Subtle Lime Accent Pill behind book icon -->
-    <path
-        android:fillColor="#D8F478"
-        android:pathData="M36,36 C36,32.686 38.686,30 42,30 L66,30 C69.314,30 72,32.686 72,36 L72,44 C72,47.314 69.314,50 66,50 L42,50 C38.686,50 36,47.314 36,44 Z"
-        android:alpha="0.18" />
-    <!-- Centered Figma Book Logo (scaled 2.2x from 24x24 around 54,54 -> offset 27.6) -->
+    <!-- Exact Figma EduTrack Symbol (277.5 x 189.058 scaled to fit 108dp adaptive icon safe zone) -->
     <group
-        android:translateX="27.6"
-        android:translateY="27.6"
-        android:scaleX="2.2"
-        android:scaleY="2.2">
+        android:translateX="24.2"
+        android:translateY="33.5"
+        android:scaleX="0.215"
+        android:scaleY="0.215">
         <path
-            android:pathData="M12 20C16 17 21 19 21 19V4C21 4 16 2 12 5C8 2 3 4 3 4V19C3 19 8 17 12 20ZM12 5V20"
-            android:strokeWidth="2.0"
-            android:strokeColor="#D8F478"
-            android:strokeLineCap="round"
-            android:strokeLineJoin="round" />
+            android:fillColor="#D8F478"
+            android:pathData="M10.8 19.3661C50.4001 18.1661 86.4001 28.9661 116.4 46.9661C122.4 50.5661 126 56.5661 126 63.7661V182.566C126 188.566 121.2 190.966 116.4 187.366C86.4001 166.966 51.6001 156.166 12 154.966C4.80005 154.966 0 150.166 0 142.966V31.3661C0 24.1661 3.60005 19.3661 10.8 19.3661Z" />
+        <path
+            android:fillColor="#D8F478"
+            android:pathData="M147.6 62.5661C147.6 55.3661 151.2 49.3661 157.2 45.7661L170.4 38.5661C174 36.1661 177.6 37.3661 181.2 40.9661L200.4 61.3661L249.6 3.76613C253.2 -1.03387 258 -1.03387 261.6 2.56613L274.8 14.5661C278.4 18.1661 278.4 22.9661 274.8 26.5661L246 60.1661V142.966C246 150.166 241.2 154.966 234 156.166C204 159.766 180 170.566 157.2 187.366C152.4 190.966 147.6 188.566 147.6 182.566V62.5661Z" />
     </group>
 </vector>

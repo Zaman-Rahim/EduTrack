@@ -28,6 +28,10 @@ class AppViewModelFactory(
                 SubjectManagerViewModel(repository) as T
             modelClass.isAssignableFrom(StatsViewModel::class.java) ->
                 StatsViewModel(repository) as T
+            modelClass.isAssignableFrom(RemindersViewModel::class.java) ->
+                RemindersViewModel(repository) as T
+            modelClass.isAssignableFrom(NotificationsViewModel::class.java) ->
+                NotificationsViewModel(repository) as T
             else -> throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
         }
     }

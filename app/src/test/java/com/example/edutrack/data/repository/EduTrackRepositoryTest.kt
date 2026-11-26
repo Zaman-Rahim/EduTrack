@@ -1,7 +1,14 @@
 package com.example.edutrack.data.repository
 
+import com.example.edutrack.data.local.dao.NotificationDao
+import com.example.edutrack.data.local.dao.ReminderDao
 import com.example.edutrack.data.local.dao.StudySessionDao
 import com.example.edutrack.data.local.dao.SubjectDao
+import com.example.edutrack.data.local.entity.NotificationEntity
+import com.example.edutrack.data.local.entity.NotificationType
+import com.example.edutrack.data.local.entity.ReminderEntity
+import com.example.edutrack.data.local.entity.ReminderPriority
+import com.example.edutrack.data.local.entity.ReminderRepeatType
 import com.example.edutrack.data.local.entity.StudySessionEntity
 import com.example.edutrack.data.local.entity.SubjectEntity
 import com.example.edutrack.data.local.relation.SessionWithSubject
@@ -130,12 +137,67 @@ class EduTrackRepositoryTest {
         }
     }
 
+    private class FakeReminderDao : ReminderDao {
+        private val remindersFlow = MutableStateFlow<List<ReminderEntity>>(emptyList())
+        private var nextId = 1L
+
+        override fun observeAllReminders(): Flow<List<ReminderEntity>> = remindersFlow
+
+        override fun observeReminderById(reminderId: Long): Flow<ReminderEntity?> =
+            remindersFlow.map { list -> list.firstOrNull { it.id == reminderId } }
+
+        override suspend fun getReminderById(reminderId: Long): ReminderEntity? =
+            remindersFlow.value.firstOrNull { it.id == reminderId }
+
+        override suspend fun insertReminder(reminder: ReminderEntity): Long {
+            val id = nextId++
+            remindersFlow.value = remindersFlow.value + reminder.copy(id = id)
+            return id
+        }
+
+        override suspend fun updateReminder(reminder: ReminderEntity) {
+            remindersFlow.value = remindersFlow.value.map {
+                if (it.id == reminder.id) reminder else it
+            }
+        }
+
+        override suspend fun deleteReminderById(reminderId: Long) {
+            remindersFlow.value = remindersFlow.value.filterNot { it.id == reminderId }
+        }
+    }
+
+    private class FakeNotificationDao : NotificationDao {
+        private val notificationsFlow = MutableStateFlow<List<NotificationEntity>>(emptyList())
+        private var nextId = 1L
+
+        override fun observeAllNotifications(): Flow<List<NotificationEntity>> = notificationsFlow
+
+        override fun observeUnreadCount(): Flow<Int> =
+            notificationsFlow.map { list -> list.count { !it.isRead } }
+
+        override suspend fun insertNotification(notification: NotificationEntity): Long {
+            val id = nextId++
+            notificationsFlow.value = listOf(notification.copy(id = id)) + notificationsFlow.value
+            return id
+        }
+
+        override suspend fun markAllAsRead() {
+            notificationsFlow.value = notificationsFlow.value.map { it.copy(isRead = true) }
+        }
+
+        override suspend fun clearAllNotifications() {
+            notificationsFlow.value = emptyList()
+        }
+    }
+
     private fun createRepository(): OfflineEduTrackRepository {
         val subjects = MutableStateFlow<List<SubjectEntity>>(emptyList())
         val sessions = MutableStateFlow<List<StudySessionEntity>>(emptyList())
         return OfflineEduTrackRepository(
             subjectDao = FakeSubjectDao(subjects, sessions),
-            studySessionDao = FakeStudySessionDao(subjects, sessions)
+            studySessionDao = FakeStudySessionDao(subjects, sessions),
+            reminderDao = FakeReminderDao(),
+            notificationDao = FakeNotificationDao()
         )
     }
 
@@ -171,5 +233,42 @@ class EduTrackRepositoryTest {
 
         assertNull(repo.getSessionById(sessionId))
         assertTrue(repo.observeAllSessionsWithSubject().first().isEmpty())
+    }
+
+    @Test
+    fun repository_remindersAndNotificationsWorkCorrectly() = runBlocking {
+        val repo = createRepository()
+
+        val reminderId = repo.insertReminder(
+            ReminderEntity(
+                title = "Submit Lab Report",
+                notes = "Upload PDF before 5 PM",
+                dueDateEpochDay = 20050L,
+                dueTimeMinutes = 1020,
+                repeatType = ReminderRepeatType.WEEKLY.name,
+                priority = ReminderPriority.HIGH.name
+            )
+        )
+        val savedReminder = repo.getReminderById(reminderId)
+        assertEquals("Submit Lab Report", savedReminder?.title)
+        assertFalse(savedReminder?.isCompleted ?: true)
+
+        repo.updateReminder(savedReminder!!.copy(isCompleted = true))
+        assertTrue(repo.observeReminderById(reminderId).first()?.isCompleted ?: false)
+
+        repo.insertNotification(
+            NotificationEntity(
+                title = "Focus complete",
+                message = "Logged 25 min for Mobile Apps",
+                type = NotificationType.FOCUS_COMPLETE.name
+            )
+        )
+        assertEquals(1, repo.observeUnreadNotificationCount().first())
+
+        repo.markAllNotificationsAsRead()
+        assertEquals(0, repo.observeUnreadNotificationCount().first())
+
+        repo.deleteReminderById(reminderId)
+        assertNull(repo.getReminderById(reminderId))
     }
 }

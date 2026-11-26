@@ -22,7 +22,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        val repository = (application as EduTrackApplication).container.repository
+        val container = (application as EduTrackApplication).container
         setContent {
             val systemDark = isSystemInDarkTheme()
             var isDarkTheme by rememberSaveable { mutableStateOf(systemDark) }
@@ -46,10 +46,9 @@ class MainActivity : ComponentActivity() {
             EduTrackTheme(darkTheme = isDarkTheme) {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     EduTrackNavHost(
-                        repository = repository,
+                        container = container,
                         isDarkTheme = isDarkTheme,
-                        onToggleTheme = {isDarkTheme = !isDarkTheme}
-
+                        onToggleTheme = { isDarkTheme = !isDarkTheme }
                     )
                 }
             }

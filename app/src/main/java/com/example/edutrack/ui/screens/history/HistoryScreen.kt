@@ -56,6 +56,8 @@ import com.example.edutrack.R
 import com.example.edutrack.ui.components.EmptyStateCard
 import com.example.edutrack.ui.components.SessionListCard
 import com.example.edutrack.ui.components.SubjectColorDot
+import com.example.edutrack.ui.components.TopRightHeaderButtons
+import com.example.edutrack.ui.components.bounceClick
 import com.example.edutrack.ui.theme.CardLightGreen
 import com.example.edutrack.ui.theme.ForestGreenDark
 import com.example.edutrack.ui.theme.ForestGreenPrimary
@@ -68,6 +70,9 @@ import com.example.edutrack.util.DateTimeUtils
 @Composable
 fun HistoryScreen(
     uiState: HistoryUiState,
+    unreadNotificationsCount: Int,
+    onNotificationsClick: () -> Unit,
+    onMeClick: () -> Unit,
     onSearchQueryChanged: (String) -> Unit,
     onSelectSubjectFilter: (Long?) -> Unit,
     onSelectDateFilter: (DateRangeFilter) -> Unit,
@@ -86,7 +91,7 @@ fun HistoryScreen(
     }
 
     Column(modifier = modifier.fillMaxSize()) {
-        // Exact Figma Header with 48dp Dark Green circular plus icon button
+        // Header with TopRightHeaderButtons + Dark Green circular plus icon button
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -94,10 +99,10 @@ fun HistoryScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "Session history",
-                    style = MaterialTheme.typography.headlineMedium.copy(fontSize = 28.sp),
+                    style = MaterialTheme.typography.headlineMedium.copy(fontSize = 26.sp),
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onBackground
                 )
@@ -108,19 +113,29 @@ fun HistoryScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .background(ForestGreenPrimary)
-                    .clickable(onClick = onLogSessionClick),
-                contentAlignment = Alignment.Center
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    painter = painterResource(id = R.drawable.ic_figma_plus),
-                    contentDescription = "Log new session",
-                    tint = Color.White,
-                    modifier = Modifier.size(24.dp)
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(ForestGreenPrimary)
+                        .bounceClick(onClick = onLogSessionClick),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_figma_plus),
+                        contentDescription = "Log new session",
+                        tint = Color.White,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+                TopRightHeaderButtons(
+                    unreadNotificationsCount = unreadNotificationsCount,
+                    onNotificationsClick = onNotificationsClick,
+                    onMeClick = onMeClick
                 )
             }
         }
