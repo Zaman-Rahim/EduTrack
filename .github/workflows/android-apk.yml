@@ -1,0 +1,81 @@
+name: Build & Publish EduTrack APK
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    name: Test & Build Debug APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: "temurin"
+
+      - name: Set up Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Run unit tests
+        run: ./gradlew testDebugUnitTest --no-daemon
+
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Prepare named APK files
+        run: |
+          mkdir -p dist
+          cp app/build/outputs/apk/debug/app-debug.apk "dist/EduTrack-debug.apk"
+          cp app/build/outputs/apk/debug/app-debug.apk "dist/EduTrack-build-${{ github.run_number }}.apk"
+
+      - name: Upload APK as Workflow Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: EduTrack-APK-build-${{ github.run_number }}
+          path: dist/EduTrack-build-${{ github.run_number }}.apk
+          retention-days: 30
+
+      - name: Publish Direct-Download APK to GitHub Releases
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="latest-apk"
+          TITLE="Latest EduTrack Test APK (Build #${{ github.run_number }})"
+          cat << 'EOF' > dist/release_notes.md
+          Automatic Android Debug APK build from GitHub Actions.
+
+          ### How to install on your Android phone
+          1. Tap **EduTrack-debug.apk** below to download directly on your phone.
+          2. Open the downloaded `.apk` file and tap **Install** (allow *Install unknown apps* if prompted).
+          EOF
+          sed -i 's/^          //' dist/release_notes.md
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --title "$TITLE" --notes-file dist/release_notes.md
+            gh release upload "$TAG" dist/EduTrack-debug.apk --clobber
+          else
+            gh release create "$TAG" dist/EduTrack-debug.apk \
+              --title "$TITLE" \
+              --notes-file dist/release_notes.md \
+              --prerelease
+          fi
