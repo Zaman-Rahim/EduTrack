@@ -1,9 +1,14 @@
 package com.example.edutrack.ui.screens.focus
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,13 +31,19 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
+import kotlinx.coroutines.launch
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -92,9 +103,59 @@ fun FocusTimerScreen(
         label = "timer_dial_sweep"
     )
 
+    // Foodpanda-style Back button + Swipe-down to minimize smoothly into the Live Focus Bar
+    BackHandler(enabled = true) {
+        onMinimizeClick()
+    }
+
+    val scope = rememberCoroutineScope()
+    val dragOffsetY = remember { Animatable(0f) }
+    val dismissThresholdPx = with(LocalDensity.current) { 110.dp.toPx() }
+
     Column(
         modifier = modifier
             .fillMaxSize()
+            .graphicsLayer {
+                val y = dragOffsetY.value
+                val progress = (y / (dismissThresholdPx * 2.4f)).coerceIn(0f, 1f)
+                translationY = y
+                scaleX = 1f - 0.06f * progress
+                scaleY = 1f - 0.06f * progress
+                alpha = 1f - 0.16f * progress
+            }
+            .pointerInput(Unit) {
+                detectVerticalDragGestures(
+                    onDragEnd = {
+                        scope.launch {
+                            if (dragOffsetY.value >= dismissThresholdPx) {
+                                onMinimizeClick()
+                            } else {
+                                dragOffsetY.animateTo(
+                                    targetValue = 0f,
+                                    animationSpec = spring(
+                                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                                        stiffness = Spring.StiffnessMediumLow
+                                    )
+                                )
+                            }
+                        }
+                    },
+                    onDragCancel = {
+                        scope.launch {
+                            dragOffsetY.animateTo(
+                                targetValue = 0f,
+                                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)
+                            )
+                        }
+                    },
+                    onVerticalDrag = { _, dragAmount ->
+                        scope.launch {
+                            val next = (dragOffsetY.value + dragAmount).coerceAtLeast(0f)
+                            dragOffsetY.snapTo(next)
+                        }
+                    }
+                )
+            }
             .padding(horizontal = 24.dp, vertical = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {

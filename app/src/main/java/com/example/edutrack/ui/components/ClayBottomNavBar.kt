@@ -77,7 +77,7 @@ data class ClayNavTab(
 fun ClayBottomNavBar(
     tabs: List<ClayNavTab>,
     selectedIndex: Int,
-    pageOffsetFraction: Float,
+    pageOffsetProvider: () -> Float,
     isDarkTheme: Boolean,
     onTabSelected: (Int) -> Unit,
     modifier: Modifier = Modifier
@@ -85,19 +85,6 @@ fun ClayBottomNavBar(
     if (tabs.isEmpty()) return
 
     val safeSelectedIndex = selectedIndex.coerceIn(0, tabs.lastIndex)
-    val clampedOffset = pageOffsetFraction.coerceIn(-1f, 1f)
-    val rawPosition = (safeSelectedIndex + clampedOffset).coerceIn(0f, tabs.lastIndex.toFloat())
-
-    // Continuous rubber-band stretch peaking mid-swipe (abs(offset) == 0.5) and snapping back with bounce
-    val stretchFactor by animateFloatAsState(
-        targetValue = sin(abs(clampedOffset) * PI).toFloat(),
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMediumLow
-        ),
-        label = "clayPillStretch"
-    )
-
     val dividerColor = if (isDarkTheme) DarkBorderFigma else TrackBorder
     val unselectedColor = if (isDarkTheme) MaterialTheme.colorScheme.onSurfaceVariant else MutedText
 
@@ -120,18 +107,26 @@ fun ClayBottomNavBar(
                 val pillWidth = 62.dp
                 val pillHeight = 34.dp
                 val pillTopOffset = 10.dp
-                val pillOffsetX = tabWidth * rawPosition + (tabWidth - pillWidth) / 2f
 
-                // Sliding 3D clay-textured LimeAccent pill
+                // Zero-recomposition GPU-driven sliding 3D clay-textured LimeAccent pill
                 ClayIndicatorPill(
-                    stretchFactor = stretchFactor,
                     isDarkTheme = isDarkTheme,
                     modifier = Modifier
                         .offset {
+                            val clampedOffset = pageOffsetProvider().coerceIn(-1f, 1f)
+                            val rawPos = (safeSelectedIndex + clampedOffset)
+                                .coerceIn(0f, tabs.lastIndex.toFloat())
+                            val offsetX = tabWidth * rawPos + (tabWidth - pillWidth) / 2f
                             IntOffset(
-                                x = pillOffsetX.roundToPx(),
+                                x = offsetX.roundToPx(),
                                 y = pillTopOffset.roundToPx()
                             )
+                        }
+                        .graphicsLayer {
+                            val clampedOffset = pageOffsetProvider().coerceIn(-1f, 1f)
+                            val stretch = sin(abs(clampedOffset) * PI).toFloat()
+                            scaleX = 1f + 0.36f * stretch
+                            scaleY = 1f - 0.12f * stretch
                         }
                         .size(width = pillWidth, height = pillHeight)
                 )
@@ -232,7 +227,6 @@ fun ClayBottomNavBar(
  */
 @Composable
 private fun ClayIndicatorPill(
-    stretchFactor: Float,
     isDarkTheme: Boolean,
     modifier: Modifier = Modifier
 ) {
@@ -247,10 +241,6 @@ private fun ClayIndicatorPill(
 
     Box(
         modifier = modifier
-            .graphicsLayer {
-                scaleX = 1f + stretchFactor * 0.36f
-                scaleY = 1f - stretchFactor * 0.12f
-            }
             .shadow(
                 elevation = 4.dp,
                 shape = pillShape,

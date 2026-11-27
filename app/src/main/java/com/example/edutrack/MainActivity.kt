@@ -1,7 +1,9 @@
 package com.example.edutrack
 
 import android.graphics.Color
+import android.os.Build
 import android.os.Bundle
+import android.view.Display
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
@@ -21,6 +23,7 @@ import com.example.edutrack.ui.theme.EduTrackTheme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        requestHighestRefreshRate()
         enableEdgeToEdge()
         val container = (application as EduTrackApplication).container
         setContent {
@@ -52,6 +55,24 @@ class MainActivity : ComponentActivity() {
                     )
                 }
             }
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun requestHighestRefreshRate() {
+        val currentDisplay: Display = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            display ?: windowManager.defaultDisplay
+        } else {
+            windowManager.defaultDisplay
+        } ?: return
+
+        val bestMode = currentDisplay.supportedModes
+            .maxByOrNull { it.refreshRate } ?: return
+
+        val params = window.attributes
+        if (params.preferredDisplayModeId != bestMode.modeId) {
+            params.preferredDisplayModeId = bestMode.modeId
+            window.attributes = params
         }
     }
 }

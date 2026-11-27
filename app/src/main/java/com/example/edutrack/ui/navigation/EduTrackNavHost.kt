@@ -189,7 +189,7 @@ fun EduTrackNavHost(
                     ClayBottomNavBar(
                         tabs = bottomNavTabs,
                         selectedIndex = pagerState.currentPage,
-                        pageOffsetFraction = pagerState.currentPageOffsetFraction,
+                        pageOffsetProvider = { pagerState.currentPageOffsetFraction },
                         isDarkTheme = isDarkTheme,
                         onTabSelected = { index ->
                             scope.launch {
@@ -216,6 +216,7 @@ fun EduTrackNavHost(
 
                 HorizontalPager(
                     state = pagerState,
+                    beyondViewportPageCount = 2,
                     modifier = Modifier.fillMaxSize()
                 ) { page ->
                     when (page) {
