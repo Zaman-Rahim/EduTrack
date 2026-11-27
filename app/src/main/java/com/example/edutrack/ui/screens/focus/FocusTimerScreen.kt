@@ -61,6 +61,7 @@ fun FocusTimerScreen(
     onEndWithoutCompletingClick: () -> Unit,
     onOpenNotificationsClick: () -> Unit,
     onBackToPlanClick: () -> Unit,
+    onStopAlarmClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val subjectName = timerState.subject?.name ?: "Study Focus"
@@ -68,8 +69,16 @@ fun FocusTimerScreen(
     if (timerState.status == TimerStatus.COMPLETED) {
         FocusCompleteView(
             subjectName = subjectName,
-            onBackClick = onBackToPlanClick,
-            onOpenNotificationsClick = onOpenNotificationsClick,
+            isAlarmRinging = timerState.isAlarmRinging,
+            onStopAlarmClick = onStopAlarmClick,
+            onBackClick = {
+                onStopAlarmClick()
+                onBackToPlanClick()
+            },
+            onOpenNotificationsClick = {
+                onStopAlarmClick()
+                onOpenNotificationsClick()
+            },
             modifier = modifier
         )
         return
@@ -258,6 +267,8 @@ fun FocusTimerScreen(
 @Composable
 private fun FocusCompleteView(
     subjectName: String,
+    isAlarmRinging: Boolean,
+    onStopAlarmClick: () -> Unit,
     onBackClick: () -> Unit,
     onOpenNotificationsClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -400,6 +411,28 @@ private fun FocusCompleteView(
         }
 
         Spacer(modifier = Modifier.weight(1f))
+
+        if (isAlarmRinging) {
+            Button(
+                onClick = onStopAlarmClick,
+                shape = RoundedCornerShape(18.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.error,
+                    contentColor = Color.White
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
+                    .bounceClick(onClick = onStopAlarmClick)
+            ) {
+                Text(
+                    text = "Stop alarm",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+        }
 
         Button(
             onClick = onBackClick,

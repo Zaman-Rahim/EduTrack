@@ -1,6 +1,7 @@
 package com.example.edutrack.ui.screens.me
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,6 +24,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -45,6 +48,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.edutrack.R
+import com.example.edutrack.data.preferences.AlarmToneOption
 import com.example.edutrack.data.preferences.UserPreferencesState
 import com.example.edutrack.ui.components.FigmaBackButton
 import com.example.edutrack.ui.components.bounceClick
@@ -75,9 +79,12 @@ fun MeScreen(
     onTimerSoundToggle: (Boolean) -> Unit,
     onToggleWeekStart: () -> Unit,
     onToggleDarkTheme: (Boolean) -> Unit,
+    onAlarmToneSelected: (AlarmToneOption) -> Unit = {},
+    onPreviewAlarmTone: (AlarmToneOption) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var showReminderTimePicker by remember { mutableStateOf(false) }
+    var showAlarmToneDialog by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
 
     LazyColumn(
@@ -341,6 +348,41 @@ fun MeScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .bounceClick { showAlarmToneDialog = true }
+                            .padding(horizontal = 16.dp, vertical = 16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Alarm tone",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = AlarmToneOption.fromName(prefs.alarmTone).label,
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_figma_arrow),
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = TrackBorder)
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
                             .bounceClick(onClick = onToggleWeekStart)
                             .padding(horizontal = 16.dp, vertical = 16.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -476,6 +518,66 @@ fun MeScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showReminderTimePicker = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    if (showAlarmToneDialog) {
+        var selectedTone by remember(prefs.alarmTone) {
+            mutableStateOf(AlarmToneOption.fromName(prefs.alarmTone))
+        }
+        AlertDialog(
+            onDismissRequest = { showAlarmToneDialog = false },
+            title = { Text("Alarm tone", fontWeight = FontWeight.SemiBold) },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    AlarmToneOption.entries.forEach { option ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable {
+                                    selectedTone = option
+                                    onPreviewAlarmTone(option)
+                                }
+                                .padding(vertical = 6.dp, horizontal = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = selectedTone == option,
+                                onClick = {
+                                    selectedTone = option
+                                    onPreviewAlarmTone(option)
+                                },
+                                colors = RadioButtonDefaults.colors(
+                                    selectedColor = ForestGreenPrimary
+                                )
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = option.label,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = if (selectedTone == option) FontWeight.SemiBold else FontWeight.Normal,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onAlarmToneSelected(selectedTone)
+                        showAlarmToneDialog = false
+                    }
+                ) {
+                    Text("Save", color = ForestGreenPrimary, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAlarmToneDialog = false }) {
+                    Text("Cancel")
+                }
             }
         )
     }

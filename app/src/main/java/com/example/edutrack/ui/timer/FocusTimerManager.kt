@@ -1,11 +1,16 @@
 package com.example.edutrack.ui.timer
 
 import android.content.Context
+import android.media.AudioAttributes
+import android.media.AudioManager
+import android.media.Ringtone
 import android.media.RingtoneManager
+import android.media.ToneGenerator
 import com.example.edutrack.data.local.entity.NotificationEntity
 import com.example.edutrack.data.local.entity.NotificationType
 import com.example.edutrack.data.local.entity.StudySessionEntity
 import com.example.edutrack.data.local.entity.SubjectEntity
+import com.example.edutrack.data.preferences.AlarmToneOption
 import com.example.edutrack.data.preferences.UserPreferencesManager
 import com.example.edutrack.data.repository.EduTrackRepository
 import com.example.edutrack.util.DateTimeUtils
@@ -33,7 +38,8 @@ data class FocusTimerUiState(
     val totalSeconds: Int = 0,
     val remainingSeconds: Int = 0,
     val status: TimerStatus = TimerStatus.IDLE,
-    val isMinimized: Boolean = false
+    val isMinimized: Boolean = false,
+    val isAlarmRinging: Boolean = false
 ) {
     val isActive: Boolean get() = status != TimerStatus.IDLE
     val progressFraction: Float
@@ -52,6 +58,10 @@ class FocusTimerManager(
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var tickerJob: Job? = null
+    private var alarmJob: Job? = null
+    private var previewJob: Job? = null
+    private var activeRingtone: Ringtone? = null
+    private var activeToneGenerator: ToneGenerator? = null
 
     private val _state = MutableStateFlow(FocusTimerUiState())
     val state: StateFlow<FocusTimerUiState> = _state.asStateFlow()
@@ -60,6 +70,7 @@ class FocusTimerManager(
         val safeMinutes = durationMinutes.coerceAtLeast(1)
         val totalSec = safeMinutes * 60
         tickerJob?.cancel()
+        stopAlarm()
         _state.value = FocusTimerUiState(
             subject = subject,
             targetMinutes = safeMinutes,
@@ -95,7 +106,40 @@ class FocusTimerManager(
 
     fun dismissOrCancel() {
         tickerJob?.cancel()
+        stopAlarm()
         _state.value = FocusTimerUiState()
+    }
+
+    fun stopAlarm() {
+        alarmJob?.cancel()
+        alarmJob = null
+        previewJob?.cancel()
+        previewJob = null
+        releaseActiveAudio()
+        _state.update { it.copy(isAlarmRinging = false) }
+    }
+
+    fun previewAlarmTone(tone: AlarmToneOption) {
+        previewJob?.cancel()
+        releaseActiveAudio()
+        previewJob = scope.launch {
+            val ringtone = createRingtoneForTone(tone)
+            if (ringtone != null) {
+                activeRingtone = ringtone
+                try {
+                    ringtone.play()
+                } catch (_: Exception) {
+                }
+                delay(1_000L)
+                releaseActiveAudio()
+            } else {
+                playToneBeep(tone, durationMs = 350)
+                delay(450L)
+                playToneBeep(tone, durationMs = 350)
+                delay(200L)
+                releaseActiveAudio()
+            }
+        }
     }
 
     private fun startTicker() {
@@ -119,7 +163,8 @@ class FocusTimerManager(
         _state.update { it.copy(status = TimerStatus.COMPLETED) }
 
         if (preferencesManager.state.value.timerCompletionSound) {
-            playCompletionSound()
+            val tone = AlarmToneOption.fromName(preferencesManager.state.value.alarmTone)
+            startAlarmLoop(tone)
         }
 
         scope.launch(Dispatchers.IO) {
@@ -142,13 +187,95 @@ class FocusTimerManager(
         }
     }
 
-    private fun playCompletionSound() {
+    private fun startAlarmLoop(tone: AlarmToneOption) {
+        alarmJob?.cancel()
+        previewJob?.cancel()
+        releaseActiveAudio()
+        _state.update { it.copy(isAlarmRinging = true) }
+
+        alarmJob = scope.launch {
+            val startTime = System.currentTimeMillis()
+            val ringtone = createRingtoneForTone(tone)
+            activeRingtone = ringtone
+
+            while (System.currentTimeMillis() - startTime < ALARM_AUTO_STOP_MS) {
+                if (ringtone != null) {
+                    try {
+                        if (!ringtone.isPlaying) {
+                            ringtone.play()
+                        }
+                    } catch (_: Exception) {
+                        playToneBeep(tone, durationMs = 300)
+                    }
+                    delay(1_200L)
+                } else {
+                    playToneBeep(tone, durationMs = 260)
+                    delay(320L)
+                    if (System.currentTimeMillis() - startTime >= ALARM_AUTO_STOP_MS) break
+                    playToneBeep(tone, durationMs = 260)
+                    delay(900L)
+                }
+            }
+            stopAlarm()
+        }
+    }
+
+    private fun createRingtoneForTone(tone: AlarmToneOption): Ringtone? {
+        if (tone == AlarmToneOption.DIGITAL_BEEP) return null
+        return try {
+            val type = when (tone) {
+                AlarmToneOption.CLASSIC_ALARM -> RingtoneManager.TYPE_ALARM
+                AlarmToneOption.GENTLE_CHIME -> RingtoneManager.TYPE_NOTIFICATION
+                AlarmToneOption.BRIGHT_BELL -> RingtoneManager.TYPE_RINGTONE
+                AlarmToneOption.DIGITAL_BEEP -> return null
+            }
+            val uri = RingtoneManager.getDefaultUri(type)
+                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+                ?: return null
+            RingtoneManager.getRingtone(context.applicationContext, uri)?.apply {
+                audioAttributes = AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ALARM)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build()
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun playToneBeep(tone: AlarmToneOption, durationMs: Int) {
         try {
-            val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-            val ringtone = RingtoneManager.getRingtone(context.applicationContext, uri)
-            ringtone?.play()
+            val tg = activeToneGenerator ?: ToneGenerator(AudioManager.STREAM_ALARM, 90).also {
+                activeToneGenerator = it
+            }
+            val toneType = when (tone) {
+                AlarmToneOption.CLASSIC_ALARM -> ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD
+                AlarmToneOption.GENTLE_CHIME -> ToneGenerator.TONE_PROP_BEEP2
+                AlarmToneOption.BRIGHT_BELL -> ToneGenerator.TONE_PROP_ACK
+                AlarmToneOption.DIGITAL_BEEP -> ToneGenerator.TONE_PROP_BEEP
+            }
+            tg.startTone(toneType, durationMs)
         } catch (_: Exception) {
             // Safe fallback on headless/muted environments
         }
+    }
+
+    private fun releaseActiveAudio() {
+        try {
+            activeRingtone?.stop()
+        } catch (_: Exception) {
+        }
+        activeRingtone = null
+        try {
+            activeToneGenerator?.stopTone()
+            activeToneGenerator?.release()
+        } catch (_: Exception) {
+        }
+        activeToneGenerator = null
+    }
+
+    private companion object {
+        const val ALARM_AUTO_STOP_MS = 30_000L
     }
 }

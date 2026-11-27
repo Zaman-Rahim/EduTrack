@@ -6,10 +6,24 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
+enum class AlarmToneOption(val label: String) {
+    CLASSIC_ALARM("Classic Alarm"),
+    GENTLE_CHIME("Gentle Chime"),
+    BRIGHT_BELL("Bright Bell"),
+    DIGITAL_BEEP("Digital Beep");
+
+    companion object {
+        fun fromName(name: String?): AlarmToneOption {
+            return entries.firstOrNull { it.name == name } ?: CLASSIC_ALARM
+        }
+    }
+}
+
 data class UserPreferencesState(
     val dailyReminderEnabled: Boolean = true,
     val dailyReminderTimeMinutes: Int = 19 * 60, // 7:00 PM
     val timerCompletionSound: Boolean = true,
+    val alarmTone: String = AlarmToneOption.CLASSIC_ALARM.name,
     val weekStartsOn: String = "Monday"
 )
 
@@ -24,6 +38,8 @@ class UserPreferencesManager(context: Context) {
             dailyReminderEnabled = prefs.getBoolean(KEY_DAILY_REMINDER, true),
             dailyReminderTimeMinutes = prefs.getInt(KEY_REMINDER_TIME_MIN, 19 * 60),
             timerCompletionSound = prefs.getBoolean(KEY_COMPLETION_SOUND, true),
+            alarmTone = prefs.getString(KEY_ALARM_TONE, AlarmToneOption.CLASSIC_ALARM.name)
+                ?: AlarmToneOption.CLASSIC_ALARM.name,
             weekStartsOn = prefs.getString(KEY_WEEK_START, "Monday") ?: "Monday"
         )
     )
@@ -44,6 +60,11 @@ class UserPreferencesManager(context: Context) {
         _state.update { it.copy(timerCompletionSound = enabled) }
     }
 
+    fun setAlarmTone(toneName: String) {
+        prefs.edit().putString(KEY_ALARM_TONE, toneName).apply()
+        _state.update { it.copy(alarmTone = toneName) }
+    }
+
     fun setWeekStartsOn(day: String) {
         prefs.edit().putString(KEY_WEEK_START, day).apply()
         _state.update { it.copy(weekStartsOn = day) }
@@ -53,6 +74,7 @@ class UserPreferencesManager(context: Context) {
         const val KEY_DAILY_REMINDER = "daily_reminder_enabled"
         const val KEY_REMINDER_TIME_MIN = "daily_reminder_time_min"
         const val KEY_COMPLETION_SOUND = "timer_completion_sound"
+        const val KEY_ALARM_TONE = "alarm_tone"
         const val KEY_WEEK_START = "week_starts_on"
     }
 }

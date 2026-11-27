@@ -156,35 +156,6 @@ fun HomeScreen(
             }
         }
 
-        // Exact Figma Full-width "Log a study session" Button with Figma Plus icon
-        item {
-            Button(
-                onClick = onAddSessionClick,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp)
-                    .bounceClick(onClick = onAddSessionClick),
-                shape = RoundedCornerShape(18.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = ForestGreenPrimary,
-                    contentColor = Color.White
-                )
-            ) {
-                Icon(
-                    painter = painterResource(id = R.drawable.ic_figma_plus),
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(22.dp)
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                Text(
-                    text = "Log a study session",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-        }
-
         // Recent Study Sessions Section Header
         item {
             Row(
@@ -561,7 +532,7 @@ private fun FigmaSubjectCard(
                 )
                 Spacer(modifier = Modifier.height(3.dp))
                 val notesText = if (summary.latestSessionNotes.isNullOrBlank()) {
-                    "${summary.subject.weeklyGoalHours}h weekly goal"
+                    String.format(Locale.getDefault(), "%.1fh weekly goal", summary.subject.weeklyGoalHours)
                 } else {
                     summary.latestSessionNotes
                 }
