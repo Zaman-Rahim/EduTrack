@@ -27,3 +27,4 @@ Thumbs.db
 # Keystore / Secrets (never commit signing keys)
 *.jks
 *.keystore
+gradle/gradle-daemon-jvm.properties
