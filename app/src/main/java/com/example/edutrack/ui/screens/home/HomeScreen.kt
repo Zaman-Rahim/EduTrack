@@ -50,6 +50,7 @@ import com.example.edutrack.ui.components.SessionListCard
 import com.example.edutrack.ui.components.TopRightHeaderButtons
 import com.example.edutrack.ui.components.bounceClick
 import com.example.edutrack.ui.components.figmaSubjectIconRes
+import com.example.edutrack.ui.theme.CardLightGreen
 import com.example.edutrack.ui.theme.ForestGreenDark
 import com.example.edutrack.ui.theme.ForestGreenPrimary
 import com.example.edutrack.ui.theme.LimeAccent
@@ -59,6 +60,7 @@ import com.example.edutrack.ui.viewmodel.HomeUiState
 import com.example.edutrack.ui.viewmodel.SubjectDashboardSummary
 import com.example.edutrack.util.DateTimeUtils
 import java.util.Locale
+import kotlin.math.roundToInt
 
 @Composable
 fun HomeScreen(
@@ -86,18 +88,25 @@ fun HomeScreen(
     ) {
         // Exact Figma Header
         item {
-            HomeHeaderSection(
-                unreadNotificationsCount = unreadNotificationsCount,
-                onNotificationsClick = onNotificationsClick,
-                onMeClick = onMeClick
-            )
+            if (isBrandNewUser) {
+                WelcomeHeaderSection(
+                    unreadNotificationsCount = unreadNotificationsCount,
+                    onNotificationsClick = onNotificationsClick,
+                    onMeClick = onMeClick
+                )
+            } else {
+                HomeHeaderSection(
+                    unreadNotificationsCount = unreadNotificationsCount,
+                    onNotificationsClick = onNotificationsClick,
+                    onMeClick = onMeClick
+                )
+            }
         }
 
         if (isBrandNewUser) {
             item {
                 FirstStudyPlanCard(
-                    onAddSubjectClick = onAddFirstSubjectClick,
-                    onLogSessionClick = onAddSessionClick
+                    onAddSubjectClick = onAddFirstSubjectClick
                 )
             }
             return@LazyColumn
@@ -240,108 +249,138 @@ private fun HomeHeaderSection(
 }
 
 @Composable
-private fun FirstStudyPlanCard(
-    onAddSubjectClick: () -> Unit,
-    onLogSessionClick: () -> Unit
+private fun WelcomeHeaderSection(
+    unreadNotificationsCount: Int,
+    onNotificationsClick: () -> Unit,
+    onMeClick: () -> Unit
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Welcome",
+                style = MaterialTheme.typography.headlineMedium.copy(fontSize = 28.sp),
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            TopRightHeaderButtons(
+                unreadNotificationsCount = unreadNotificationsCount,
+                onNotificationsClick = onNotificationsClick,
+                onMeClick = onMeClick
+            )
+        }
+        Text(
+            text = "YOUR STUDY ROUTINE STARTS HERE",
+            fontSize = 10.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = 0.8.sp
+        )
+    }
+}
+
+@Composable
+private fun FirstStudyPlanCard(
+    onAddSubjectClick: () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        // Exact Figma `24:400` Study plan introduction dark green card with 96.dp centered book icon
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(26.dp),
+            shape = RoundedCornerShape(28.dp),
             colors = CardDefaults.cardColors(containerColor = ForestGreenPrimary),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(24.dp)
+                    .padding(horizontal = 24.dp, vertical = 28.dp)
             ) {
-                Surface(
-                    shape = RoundedCornerShape(999.dp),
-                    color = LimeAccent
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = "FRESH START",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = ForestGreenDark,
-                        letterSpacing = 0.8.sp,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_figma_book),
+                        contentDescription = null,
+                        tint = LimeAccent,
+                        modifier = Modifier.size(92.dp)
                     )
                 }
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(22.dp))
                 Text(
-                    text = "Build your first\ndaily study plan",
-                    style = MaterialTheme.typography.headlineSmall.copy(lineHeight = 32.sp),
+                    text = "A little focus.\nEvery day.",
+                    style = MaterialTheme.typography.headlineMedium.copy(
+                        fontSize = 30.sp,
+                        lineHeight = 38.sp
+                    ),
                     fontWeight = FontWeight.SemiBold,
                     color = Color.White
                 )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "Add the subjects you want to focus on, pick your daily minutes and repeat days, and count down live.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color(0xFFD3E0D5)
-                )
-                Spacer(modifier = Modifier.height(20.dp))
-                Button(
-                    onClick = onAddSubjectClick,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp)
-                        .bounceClick(onClick = onAddSubjectClick),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = LimeAccent,
-                        contentColor = ForestGreenDark
-                    )
-                ) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_figma_plus),
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text(
-                        text = "Add your first subject",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
             }
         }
 
-        Card(
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                text = "Build your first study plan",
+                style = MaterialTheme.typography.headlineSmall.copy(fontSize = 24.sp),
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            Text(
+                text = "Add your subjects, choose daily minutes, and select the days you want to practise.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        // Exact Figma `24:406` Getting started steps card
+        Surface(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(22.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            shape = RoundedCornerShape(20.dp),
+            color = CardLightGreen
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(20.dp),
+                    .padding(horizontal = 16.dp, vertical = 15.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(
-                    text = "How EduTrack works",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
+                    text = "01   Add a subject and a daily time goal",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = ForestGreenDark
                 )
                 Text(
-                    text = "1. Add subjects with daily target minutes and weekly repeat days.\n2. Tap a subject in Today's To-Do to start the live countdown timer.\n3. When the timer hits 00:00, it auto-saves your session and moves to Completed.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    lineHeight = 20.sp
+                    text = "02   Choose repeat days, or study just once",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = ForestGreenDark
                 )
-                TextButton(onClick = onLogSessionClick) {
-                    Text(
-                        text = "Or log a past session manually",
-                        color = ForestGreenPrimary,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
             }
+        }
+
+        Button(
+            onClick = onAddSubjectClick,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp)
+                .bounceClick(onClick = onAddSubjectClick),
+            shape = RoundedCornerShape(18.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = ForestGreenPrimary,
+                contentColor = Color.White
+            )
+        ) {
+            Text(
+                text = "Add your first subject",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
         }
     }
 }
@@ -532,7 +571,7 @@ private fun FigmaSubjectCard(
                 )
                 Spacer(modifier = Modifier.height(3.dp))
                 val notesText = if (summary.latestSessionNotes.isNullOrBlank()) {
-                    String.format(Locale.getDefault(), "%.1fh weekly goal", summary.subject.weeklyGoalHours)
+                    "${formatHoursAsHoursMinutes(summary.subject.weeklyGoalHours)} weekly goal"
                 } else {
                     summary.latestSessionNotes
                 }
@@ -548,7 +587,7 @@ private fun FigmaSubjectCard(
             Spacer(modifier = Modifier.width(10.dp))
 
             Text(
-                text = String.format(Locale.getDefault(), "%.1fh", summary.hoursThisWeek),
+                text = formatHoursAsHoursMinutes(summary.hoursThisWeek),
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
@@ -558,5 +597,16 @@ private fun FigmaSubjectCard(
                     .padding(horizontal = 6.dp, vertical = 4.dp)
             )
         }
+    }
+}
+
+private fun formatHoursAsHoursMinutes(hours: Double): String {
+    val totalMinutes = (hours * 60).roundToInt().coerceAtLeast(0)
+    return if (totalMinutes < 60) {
+        "${totalMinutes}m"
+    } else {
+        val h = totalMinutes / 60
+        val m = totalMinutes % 60
+        if (m == 0) "${h}h" else "${h}h ${m}m"
     }
 }

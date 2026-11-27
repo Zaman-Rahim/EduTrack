@@ -1,6 +1,5 @@
 package com.example.edutrack.ui.screens.reminders
 
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -31,13 +30,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -46,7 +45,7 @@ import com.example.edutrack.R
 import com.example.edutrack.data.local.entity.ReminderEntity
 import com.example.edutrack.data.local.entity.ReminderPriority
 import com.example.edutrack.data.local.entity.ReminderRepeatType
-import com.example.edutrack.ui.components.EmptyStateCard
+import com.example.edutrack.ui.components.ClaySegmentedControl
 import com.example.edutrack.ui.components.TopRightHeaderButtons
 import com.example.edutrack.ui.components.bounceClick
 import com.example.edutrack.ui.theme.DeleteRedBg
@@ -127,53 +126,16 @@ fun RemindersScreen(
             }
         }
 
-        // 3-Way Segmented Filter Bar (Today | Upcoming | Completed)
+        // 3-Way Segmented Filter Bar (Today | Upcoming | Completed) matching Figma 24:25
         item {
-            Surface(
-                shape = RoundedCornerShape(14.dp),
-                color = MaterialTheme.colorScheme.surface,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    ReminderTabFilter.entries.forEach { tab ->
-                        val selected = uiState.selectedTab == tab
-                        val bg by animateColorAsState(
-                            targetValue = if (selected) ForestGreenPrimary else Color.Transparent,
-                            label = "rem_tab_bg"
-                        )
-                        val textColor by animateColorAsState(
-                            targetValue = if (selected) Color.White else MaterialTheme.colorScheme.onSurface,
-                            label = "rem_tab_txt"
-                        )
-                        val count = when (tab) {
-                            ReminderTabFilter.TODAY -> uiState.todayCount
-                            ReminderTabFilter.UPCOMING -> uiState.upcomingCount
-                            ReminderTabFilter.COMPLETED -> uiState.completedCount
-                        }
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(40.dp)
-                                .clip(RoundedCornerShape(11.dp))
-                                .background(bg)
-                                .bounceClick { onSelectTab(tab) },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = if (count > 0) "${tab.label} ($count)" else tab.label,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = textColor
-                            )
-                        }
-                    }
+            val tabs = ReminderTabFilter.entries
+            ClaySegmentedControl(
+                options = tabs.map { it.label },
+                selectedIndex = tabs.indexOf(uiState.selectedTab).coerceAtLeast(0),
+                onOptionSelected = { index ->
+                    onSelectTab(tabs[index])
                 }
-            }
+            )
         }
 
         item {
@@ -194,13 +156,53 @@ fun RemindersScreen(
 
         if (!uiState.isLoading && uiState.visibleReminders.isEmpty()) {
             item {
-                EmptyStateCard(
-                    icon = Icons.Outlined.NotificationsNone,
-                    title = "No reminders here",
-                    description = "Tap '+ Add reminder' above to schedule an assignment, exam, or daily personal task.",
-                    actionLabel = "Add Reminder",
-                    onActionClick = onAddReminderClick
-                )
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.NotificationsNone,
+                            contentDescription = null,
+                            modifier = Modifier.size(44.dp),
+                            tint = ForestGreenPrimary
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = "No reminders here",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "Tap '+ Add reminder' above to schedule an assignment, exam, or daily personal task.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Button(
+                            onClick = onAddReminderClick,
+                            shape = RoundedCornerShape(16.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = ForestGreenPrimary,
+                                contentColor = Color.White
+                            ),
+                            modifier = Modifier.bounceClick(onClick = onAddReminderClick)
+                        ) {
+                            Text("Add Reminder")
+                        }
+                    }
+                }
             }
         } else {
             items(uiState.visibleReminders, key = { "rem_${it.id}" }) { reminder ->
@@ -228,8 +230,7 @@ private fun ReminderListCard(
         else -> DateTimeUtils.formatShortDate(reminder.dueDateEpochDay)
     }
     val timeLabel = RemindersViewModel.formatTimeOfDay(reminder.dueTimeMinutes)
-    val repeatLabel = runCatching { ReminderRepeatType.valueOf(reminder.repeatType).label }
-        .getOrDefault("Does not repeat")
+    val repeatLabel = reminder.formatRepeatSummary()
     val isHighPriority = reminder.priority == ReminderPriority.HIGH.name
 
     Card(

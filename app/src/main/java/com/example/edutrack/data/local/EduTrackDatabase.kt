@@ -24,7 +24,7 @@ import com.example.edutrack.data.local.entity.SubjectEntity
         ReminderEntity::class,
         NotificationEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = true
 )
 abstract class EduTrackDatabase : RoomDatabase() {

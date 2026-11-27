@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -156,7 +157,8 @@ fun FocusTimerScreen(
                     }
                 )
             }
-            .padding(horizontal = 24.dp, vertical = 16.dp),
+            .navigationBarsPadding()
+            .padding(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         // Header with Down Arrow Minimize button
@@ -314,6 +316,8 @@ fun FocusTimerScreen(
             )
         }
 
+        Spacer(modifier = Modifier.height(6.dp))
+
         TextButton(onClick = onEndWithoutCompletingClick) {
             Text(
                 text = "End without completing",
@@ -337,7 +341,8 @@ private fun FocusCompleteView(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(horizontal = 24.dp, vertical = 16.dp),
+            .navigationBarsPadding()
+            .padding(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Row(

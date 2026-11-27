@@ -1,12 +1,23 @@
 package com.example.edutrack.ui.screens.reminders
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -22,9 +33,9 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -40,13 +51,9 @@ import androidx.compose.ui.unit.sp
 import com.example.edutrack.R
 import com.example.edutrack.data.local.entity.ReminderEntity
 import com.example.edutrack.data.local.entity.ReminderPriority
-import com.example.edutrack.data.local.entity.ReminderRepeatType
-import com.example.edutrack.ui.components.ConfirmDeleteDialog
 import com.example.edutrack.ui.components.EmptyStateCard
 import com.example.edutrack.ui.components.FigmaBackButton
 import com.example.edutrack.ui.components.bounceClick
-import com.example.edutrack.ui.theme.CardLightGreen
-import com.example.edutrack.ui.theme.DeleteRedBg
 import com.example.edutrack.ui.theme.DeleteRedText
 import com.example.edutrack.ui.theme.ForestGreenDark
 import com.example.edutrack.ui.theme.ForestGreenPrimary
@@ -55,6 +62,16 @@ import com.example.edutrack.ui.theme.TrackBorder
 import com.example.edutrack.ui.viewmodel.RemindersViewModel
 import com.example.edutrack.util.DateTimeUtils
 
+private enum class ReminderDetailStep {
+    MAIN,
+    SNOOZE,
+    DELETE_CONFIRM
+}
+
+/**
+ * Exact Figma `24:55` ("Reminder details"), `24:85` ("Snooze reminder"),
+ * and `24:95` ("Delete reminder?").
+ */
 @Composable
 fun ReminderDetailScreen(
     reminder: ReminderEntity?,
@@ -63,9 +80,14 @@ fun ReminderDetailScreen(
     onSnoozeClick: (ReminderEntity, Int) -> Unit,
     onEditClick: (Long) -> Unit,
     onDeleteConfirm: (Long) -> Unit,
+    onPreviewAlertClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    var showDeleteDialog by remember { mutableStateOf(false) }
+    var currentStep by remember { mutableStateOf(ReminderDetailStep.MAIN) }
+
+    BackHandler(enabled = currentStep != ReminderDetailStep.MAIN) {
+        currentStep = ReminderDetailStep.MAIN
+    }
 
     if (reminder == null) {
         Column(
@@ -86,164 +108,208 @@ fun ReminderDetailScreen(
         return
     }
 
+    val todayEpoch = DateTimeUtils.todayEpochDay()
+    val dateText = when (reminder.dueDateEpochDay) {
+        todayEpoch -> "Today"
+        todayEpoch + 1 -> "Tomorrow"
+        todayEpoch - 1 -> "Yesterday"
+        else -> DateTimeUtils.formatShortDate(reminder.dueDateEpochDay)
+    }
+    val dueSummary = "$dateText · ${RemindersViewModel.formatTimeOfDay(reminder.dueTimeMinutes)}"
+
+    AnimatedContent(
+        targetState = currentStep,
+        transitionSpec = {
+            (slideInHorizontally(
+                initialOffsetX = { if (targetState == ReminderDetailStep.MAIN) -it / 3 else it / 3 },
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioLowBouncy,
+                    stiffness = Spring.StiffnessMediumLow
+                )
+            ) + fadeIn()) togetherWith (slideOutHorizontally(
+                targetOffsetX = { if (targetState == ReminderDetailStep.MAIN) it / 3 else -it / 3 },
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioLowBouncy,
+                    stiffness = Spring.StiffnessMediumLow
+                )
+            ) + fadeOut())
+        },
+        modifier = modifier.fillMaxSize(),
+        label = "reminder_detail_steps"
+    ) { step ->
+        when (step) {
+            ReminderDetailStep.MAIN -> {
+                ReminderDetailMainView(
+                    reminder = reminder,
+                    dueSummary = dueSummary,
+                    onBackClick = onBackClick,
+                    onToggleComplete = { onToggleComplete(reminder) },
+                    onEditClick = { onEditClick(reminder.id) },
+                    onOpenSnooze = { currentStep = ReminderDetailStep.SNOOZE },
+                    onOpenDelete = { currentStep = ReminderDetailStep.DELETE_CONFIRM },
+                    onPreviewAlertClick = onPreviewAlertClick
+                )
+            }
+
+            ReminderDetailStep.SNOOZE -> {
+                SnoozeReminderView(
+                    reminder = reminder,
+                    dueSummary = dueSummary,
+                    onBackClick = { currentStep = ReminderDetailStep.MAIN },
+                    onSnoozeSelected = { addMinutes ->
+                        onSnoozeClick(reminder, addMinutes)
+                        currentStep = ReminderDetailStep.MAIN
+                    }
+                )
+            }
+
+            ReminderDetailStep.DELETE_CONFIRM -> {
+                DeleteReminderConfirmView(
+                    reminderTitle = reminder.title,
+                    onBackClick = { currentStep = ReminderDetailStep.MAIN },
+                    onConfirmDelete = { onDeleteConfirm(reminder.id) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReminderDetailMainView(
+    reminder: ReminderEntity,
+    dueSummary: String,
+    onBackClick: () -> Unit,
+    onToggleComplete: () -> Unit,
+    onEditClick: () -> Unit,
+    onOpenSnooze: () -> Unit,
+    onOpenDelete: () -> Unit,
+    onPreviewAlertClick: () -> Unit
+) {
     val priorityLabel = runCatching { ReminderPriority.valueOf(reminder.priority).label }.getOrDefault("Normal")
-    val repeatLabel = runCatching { ReminderRepeatType.valueOf(reminder.repeatType).label }.getOrDefault("Does not repeat")
+    val repeatLabel = reminder.formatRepeatSummary()
 
     Column(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxSize()
+            .navigationBarsPadding()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            FigmaBackButton(onClick = onBackClick)
+        Text(
+            text = "‹  Reminders",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Medium,
+            color = ForestGreenPrimary,
+            modifier = Modifier.bounceClick(onClick = onBackClick)
+        )
+
+        Column {
             Text(
                 text = "Reminder details",
-                style = MaterialTheme.typography.titleLarge.copy(fontSize = 19.sp),
+                style = MaterialTheme.typography.headlineMedium.copy(fontSize = 28.sp),
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onBackground
             )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = "A little nudge for your everyday tasks.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
 
+        // Exact Figma `24:55` Dark green UP NEXT hero card
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = CardLightGreen)
+            shape = RoundedCornerShape(22.dp),
+            colors = CardDefaults.cardColors(containerColor = ForestGreenPrimary)
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                    .padding(horizontal = 20.dp, vertical = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = if (reminder.priority == ReminderPriority.HIGH.name) DeleteRedBg else Color.White
-                    ) {
-                        Text(
-                            text = "$priorityLabel priority",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = if (reminder.priority == ReminderPriority.HIGH.name) DeleteRedText else ForestGreenDark,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                        )
-                    }
-
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = if (reminder.isCompleted) ForestGreenPrimary else LimeAccent
-                    ) {
-                        Text(
-                            text = if (reminder.isCompleted) "Completed" else "Scheduled",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = if (reminder.isCompleted) Color.White else ForestGreenDark,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                        )
-                    }
-                }
-
+                Text(
+                    text = if (reminder.isCompleted) "COMPLETED" else "UP NEXT",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color(0xFFD4E0D5),
+                    letterSpacing = 0.8.sp
+                )
                 Text(
                     text = reminder.title,
-                    style = MaterialTheme.typography.headlineSmall,
+                    style = MaterialTheme.typography.headlineSmall.copy(fontSize = 22.sp),
                     fontWeight = FontWeight.SemiBold,
-                    color = ForestGreenDark
+                    color = Color.White
                 )
-
                 Text(
-                    text = "${DateTimeUtils.formatFullDate(reminder.dueDateEpochDay)} · ${RemindersViewModel.formatTimeOfDay(reminder.dueTimeMinutes)}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    text = dueSummary,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = LimeAccent
                 )
             }
         }
 
+        // Single white 3-row info card
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
         ) {
-            Column(modifier = Modifier.padding(18.dp)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_figma_clock),
-                        contentDescription = null,
-                        tint = ForestGreenPrimary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Text(
-                        text = repeatLabel,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-
-                HorizontalDivider(modifier = Modifier.padding(vertical = 14.dp), color = TrackBorder)
-
-                Text(
-                    text = "Notes",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+            Column(modifier = Modifier.fillMaxWidth()) {
+                DetailInfoRow(label = "Repeat", value = repeatLabel)
+                HorizontalDivider(color = TrackBorder.copy(alpha = 0.5f), modifier = Modifier.padding(horizontal = 16.dp))
+                DetailInfoRow(label = "Priority", value = priorityLabel)
+                HorizontalDivider(color = TrackBorder.copy(alpha = 0.5f), modifier = Modifier.padding(horizontal = 16.dp))
+                DetailInfoRow(
+                    label = "Notification",
+                    value = if (reminder.notifyEnabled) "On · at time of reminder" else "Off · silent task"
                 )
-                Spacer(modifier = Modifier.height(6.dp))
+            }
+        }
+
+        if (reminder.notes.isNotBlank()) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
-                    text = reminder.notes.ifBlank { "No notes added for this reminder." },
+                    text = "NOTES",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    letterSpacing = 0.8.sp
+                )
+                Text(
+                    text = reminder.notes,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = MaterialTheme.colorScheme.onBackground
                 )
             }
         }
 
-        // Snooze options
-        if (!reminder.isCompleted) {
-            Text(
-                text = "Snooze reminder",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onBackground
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                listOf(15 to "+15 min", 60 to "+1 hour", 1440 to "Tomorrow").forEach { (mins, label) ->
-                    OutlinedButton(
-                        onClick = { onSnoozeClick(reminder, mins) },
-                        shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text(label, fontSize = 12.sp, color = ForestGreenPrimary)
-                    }
-                }
-            }
-        }
+        Spacer(modifier = Modifier.height(4.dp))
 
         Button(
-            onClick = { onToggleComplete(reminder) },
-            shape = RoundedCornerShape(18.dp),
+            onClick = onToggleComplete,
+            shape = RoundedCornerShape(16.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = LimeAccent,
-                contentColor = ForestGreenDark
+                containerColor = ForestGreenPrimary,
+                contentColor = Color.White
             ),
             modifier = Modifier
                 .fillMaxWidth()
                 .height(52.dp)
-                .bounceClick { onToggleComplete(reminder) }
+                .bounceClick(onClick = onToggleComplete)
         ) {
+            Icon(
+                painter = painterResource(id = R.drawable.ic_figma_check),
+                contentDescription = null,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = if (reminder.isCompleted) "Reopen reminder" else "Mark as completed",
+                text = if (reminder.isCompleted) "Mark as active" else "Mark as completed",
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold
             )
@@ -253,45 +319,307 @@ fun ReminderDetailScreen(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Button(
-                onClick = { onEditClick(reminder.id) },
-                shape = RoundedCornerShape(18.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = ForestGreenPrimary,
-                    contentColor = Color.White
-                ),
+            Surface(
                 modifier = Modifier
                     .weight(1f)
-                    .height(54.dp)
+                    .height(52.dp)
+                    .bounceClick(onClick = onEditClick),
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surface
             ) {
-                Text("Edit reminder", fontWeight = FontWeight.SemiBold)
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        text = "Edit reminder",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                }
             }
-
-            Button(
-                onClick = { showDeleteDialog = true },
-                shape = RoundedCornerShape(18.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = DeleteRedBg,
-                    contentColor = DeleteRedText
-                ),
+            Surface(
                 modifier = Modifier
-                    .width(96.dp)
-                    .height(54.dp)
+                    .weight(1f)
+                    .height(52.dp)
+                    .bounceClick(onClick = onOpenSnooze),
+                shape = RoundedCornerShape(16.dp),
+                color = LimeAccent
             ) {
-                Text("Delete", fontWeight = FontWeight.SemiBold)
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        text = "Snooze",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = ForestGreenDark
+                    )
+                }
+            }
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            TextButton(onClick = onOpenDelete) {
+                Text(
+                    text = "Delete reminder",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = DeleteRedText
+                )
+            }
+            TextButton(onClick = onPreviewAlertClick) {
+                Text(
+                    text = "Preview due alert  →",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = ForestGreenPrimary
+                )
             }
         }
     }
+}
 
-    if (showDeleteDialog) {
-        ConfirmDeleteDialog(
-            title = "Delete reminder?",
-            message = "This will permanently remove \"${reminder.title}\".",
-            onConfirm = {
-                showDeleteDialog = false
-                onDeleteConfirm(reminder.id)
-            },
-            onDismiss = { showDeleteDialog = false }
+/**
+ * Exact Figma `24:85` ("EduTrack · Snooze reminder").
+ */
+@Composable
+private fun SnoozeReminderView(
+    reminder: ReminderEntity,
+    dueSummary: String,
+    onBackClick: () -> Unit,
+    onSnoozeSelected: (Int) -> Unit
+) {
+    val tomorrowMinutesOffset = run {
+        val nextDayMorning = 9 * 60
+        (24 * 60 - reminder.dueTimeMinutes) + nextDayMorning
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .navigationBarsPadding()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 24.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Text(
+            text = "‹  Reminder",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Medium,
+            color = ForestGreenPrimary,
+            modifier = Modifier.bounceClick(onClick = onBackClick)
+        )
+
+        Column {
+            Text(
+                text = "Snooze reminder",
+                style = MaterialTheme.typography.headlineMedium.copy(fontSize = 28.sp),
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = "A little later is okay.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = ForestGreenPrimary)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = reminder.title,
+                    style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp),
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.White
+                )
+                Text(
+                    text = dueSummary,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = LimeAccent
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        listOf(
+            10 to "In 10 minutes",
+            30 to "In 30 minutes",
+            60 to "In 1 hour",
+            tomorrowMinutesOffset to "Tomorrow morning"
+        ).forEach { (mins, label) ->
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
+                    .bounceClick { onSnoozeSelected(mins) },
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surface
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        text = label,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "The reminder stays active until you complete it.\nChoose Edit to change the full schedule.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+/**
+ * Exact Figma `24:95` ("EduTrack · Delete reminder?").
+ */
+@Composable
+private fun DeleteReminderConfirmView(
+    reminderTitle: String,
+    onBackClick: () -> Unit,
+    onConfirmDelete: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .navigationBarsPadding()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 24.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Text(
+            text = "‹  Reminder",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Medium,
+            color = ForestGreenPrimary,
+            modifier = Modifier.bounceClick(onClick = onBackClick)
+        )
+
+        Column {
+            Text(
+                text = "Delete reminder?",
+                style = MaterialTheme.typography.headlineMedium.copy(fontSize = 28.sp),
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = "This removes the task from your reminders.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(22.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(
+                    text = "PLEASE CONFIRM",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = DeleteRedText,
+                    letterSpacing = 0.8.sp
+                )
+                Text(
+                    text = reminderTitle,
+                    style = MaterialTheme.typography.headlineSmall.copy(fontSize = 23.sp),
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+                Text(
+                    text = "You can always add a new reminder later.\nYour study subjects will not be affected.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Button(
+            onClick = onConfirmDelete,
+            shape = RoundedCornerShape(16.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = DeleteRedText,
+                contentColor = Color.White
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp)
+                .bounceClick(onClick = onConfirmDelete)
+        ) {
+            Text(
+                text = "Delete reminder",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp)
+                .bounceClick(onClick = onBackClick),
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surface
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Text(
+                    text = "Keep reminder",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DetailInfoRow(label: String, value: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            fontSize = 13.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = value,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onBackground
         )
     }
 }

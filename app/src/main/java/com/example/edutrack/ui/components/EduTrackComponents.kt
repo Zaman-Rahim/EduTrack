@@ -1,21 +1,31 @@
 package com.example.edutrack.ui.components
 
 import androidx.annotation.DrawableRes
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -32,15 +42,25 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -59,9 +79,11 @@ import com.example.edutrack.ui.timer.FocusTimerUiState
 import com.example.edutrack.ui.timer.TimerStatus
 import com.example.edutrack.util.DateTimeUtils
 import java.util.Locale
+import kotlin.math.abs
+import kotlinx.coroutines.launch
 
 /**
- * Applies a responsive spring press animation across buttons, cards, and interactive tiles.
+ * Applies a rubbery clay squash-and-stretch spring press animation across buttons, cards, and interactive tiles.
  */
 fun Modifier.bounceClick(
     enabled: Boolean = true,
@@ -70,18 +92,26 @@ fun Modifier.bounceClick(
 ): Modifier = composed {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed && enabled) scaleDown else 1f,
+    val squashY by animateFloatAsState(
+        targetValue = if (isPressed && enabled) (scaleDown - 0.03f).coerceAtLeast(0.86f) else 1f,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium
+            stiffness = Spring.StiffnessMediumLow
         ),
-        label = "bounce_scale"
+        label = "clay_squash_y"
+    )
+    val stretchX by animateFloatAsState(
+        targetValue = if (isPressed && enabled) (scaleDown + (1f - scaleDown) * 1.35f).coerceAtMost(1.03f) else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "clay_stretch_x"
     )
     this
         .graphicsLayer {
-            scaleX = scale
-            scaleY = scale
+            scaleX = stretchX
+            scaleY = squashY
         }
         .clickable(
             interactionSource = interactionSource,
@@ -89,6 +119,116 @@ fun Modifier.bounceClick(
             enabled = enabled,
             onClick = onClick
         )
+}
+
+/**
+ * Reusable 3D clay segmented control with a smoothly sliding, rubbery-stretching selected pill.
+ */
+@Composable
+fun ClaySegmentedControl(
+    options: List<String>,
+    selectedIndex: Int,
+    onOptionSelected: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    if (options.isEmpty()) return
+
+    val clampedIndex = selectedIndex.coerceIn(0, options.lastIndex)
+    val containerShape = RoundedCornerShape(16.dp)
+    val pillShape = RoundedCornerShape(13.dp)
+
+    val stretchX = remember { Animatable(1f) }
+    val stretchY = remember { Animatable(1f) }
+    var initialized by remember { mutableStateOf(false) }
+
+    LaunchedEffect(clampedIndex) {
+        if (!initialized) {
+            initialized = true
+            return@LaunchedEffect
+        }
+        launch {
+            stretchX.animateTo(1.10f, animationSpec = tween(durationMillis = 85))
+            stretchX.animateTo(
+                targetValue = 1f,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMedium
+                )
+            )
+        }
+        launch {
+            stretchY.animateTo(0.90f, animationSpec = tween(durationMillis = 85))
+            stretchY.animateTo(
+                targetValue = 1f,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMedium
+                )
+            )
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(48.dp)
+            .clip(containerShape)
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(4.dp)
+    ) {
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            val segmentWidth = maxWidth / options.size
+            val pillOffsetX by animateDpAsState(
+                targetValue = segmentWidth * clampedIndex,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMediumLow
+                ),
+                label = "clay_pill_offset"
+            )
+
+            // Flat Figma dark green pill driven by GPU translation & rubbery squash/stretch
+            Box(
+                modifier = Modifier
+                    .width(segmentWidth)
+                    .fillMaxHeight()
+                    .graphicsLayer {
+                        translationX = pillOffsetX.toPx()
+                        scaleX = stretchX.value
+                        scaleY = stretchY.value
+                    }
+                    .clip(pillShape)
+                    .background(ForestGreenPrimary)
+            )
+
+            Row(modifier = Modifier.fillMaxSize()) {
+                options.forEachIndexed { index, label ->
+                    val isSelected = index == clampedIndex
+                    val textColor by animateColorAsState(
+                        targetValue = if (isSelected) Color.White else MaterialTheme.colorScheme.onBackground,
+                        label = "clay_segment_text"
+                    )
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .clip(pillShape)
+                            .bounceClick(scaleDown = 0.95f) { onOptionSelected(index) },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                            color = textColor,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+        }
+    }
 }
 
 @DrawableRes
@@ -167,13 +307,15 @@ fun TopRightHeaderButtons(
 
 /**
  * Exact Figma `47:62` Uber/Foodpanda-style persistent bottom Live Focus Bar when timer is minimized.
+ * Supports horizontal swipe left or right to slide off-screen and dismiss.
  */
 @Composable
 fun LiveFocusBar(
     timerState: FocusTimerUiState,
     onExpandClick: () -> Unit,
     onPauseResumeOrDismissClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onSwipeDismiss: () -> Unit = {}
 ) {
     val subjectName = timerState.subject?.name ?: "Focus session"
     val mins = timerState.remainingSeconds / 60
@@ -187,10 +329,63 @@ fun LiveFocusBar(
         TimerStatus.IDLE -> ""
     }
 
+    val offsetX = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    var barWidthPx by remember { mutableFloatStateOf(0f) }
+    val minDismissPx = with(LocalDensity.current) { 96.dp.toPx() }
+
     Card(
         modifier = modifier
             .fillMaxWidth()
             .height(72.dp)
+            .onSizeChanged { barWidthPx = it.width.toFloat() }
+            .graphicsLayer {
+                translationX = offsetX.value
+                val fadeDistance = (if (barWidthPx > 0f) barWidthPx else 800f) * 0.85f
+                alpha = (1f - (abs(offsetX.value) / fadeDistance)).coerceIn(0f, 1f)
+            }
+            .pointerInput(onSwipeDismiss) {
+                detectHorizontalDragGestures(
+                    onHorizontalDrag = { change, dragAmount ->
+                        change.consume()
+                        scope.launch {
+                            offsetX.snapTo(offsetX.value + dragAmount)
+                        }
+                    },
+                    onDragEnd = {
+                        val threshold = maxOf(minDismissPx, barWidthPx * 0.30f)
+                        if (abs(offsetX.value) >= threshold) {
+                            val offscreenTarget = (if (barWidthPx > 0f) barWidthPx else 1000f) * 1.2f
+                            val targetX = if (offsetX.value >= 0f) offscreenTarget else -offscreenTarget
+                            scope.launch {
+                                offsetX.animateTo(targetX, animationSpec = tween(durationMillis = 180))
+                                onSwipeDismiss()
+                            }
+                        } else {
+                            scope.launch {
+                                offsetX.animateTo(
+                                    targetValue = 0f,
+                                    animationSpec = spring(
+                                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                                        stiffness = Spring.StiffnessMedium
+                                    )
+                                )
+                            }
+                        }
+                    },
+                    onDragCancel = {
+                        scope.launch {
+                            offsetX.animateTo(
+                                targetValue = 0f,
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                                    stiffness = Spring.StiffnessMedium
+                                )
+                            )
+                        }
+                    }
+                )
+            }
             .bounceClick(scaleDown = 0.98f, onClick = onExpandClick),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = ForestGreenPrimary),

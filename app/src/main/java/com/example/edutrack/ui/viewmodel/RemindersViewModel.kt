@@ -32,6 +32,7 @@ data class ReminderEditorState(
     val dueDateEpochDay: Long = DateTimeUtils.todayEpochDay(),
     val dueTimeMinutes: Int = 9 * 60, // 9:00 AM
     val repeatType: ReminderRepeatType = ReminderRepeatType.NONE,
+    val repeatDaysMask: Int = 0b0010101,
     val priority: ReminderPriority = ReminderPriority.NORMAL,
     val notifyEnabled: Boolean = true,
     val titleError: String? = null
@@ -123,6 +124,7 @@ class RemindersViewModel(
                     dueTimeMinutes = reminder.dueTimeMinutes,
                     repeatType = runCatching { ReminderRepeatType.valueOf(reminder.repeatType) }
                         .getOrDefault(ReminderRepeatType.NONE),
+                    repeatDaysMask = reminder.repeatDaysMask,
                     priority = runCatching { ReminderPriority.valueOf(reminder.priority) }
                         .getOrDefault(ReminderPriority.NORMAL),
                     notifyEnabled = reminder.notifyEnabled
@@ -136,6 +138,16 @@ class RemindersViewModel(
     fun onDueDateSelected(epochDay: Long) = editorState.update { it.copy(dueDateEpochDay = epochDay) }
     fun onDueTimeSelected(minutesFromMidnight: Int) = editorState.update { it.copy(dueTimeMinutes = minutesFromMidnight) }
     fun onRepeatTypeSelected(repeatType: ReminderRepeatType) = editorState.update { it.copy(repeatType = repeatType) }
+    fun onRepeatDaysMaskChanged(mask: Int) = editorState.update {
+        it.copy(
+            repeatType = if (mask == 0) ReminderRepeatType.NONE else ReminderRepeatType.CUSTOM,
+            repeatDaysMask = mask
+        )
+    }
+    fun onToggleRepeatDayBit(dayIndexZeroToSix: Int) = editorState.update { current ->
+        val nextMask = current.repeatDaysMask xor (1 shl dayIndexZeroToSix)
+        current.copy(repeatDaysMask = nextMask)
+    }
     fun onPrioritySelected(priority: ReminderPriority) = editorState.update { it.copy(priority = priority) }
     fun onNotifyToggle(enabled: Boolean) = editorState.update { it.copy(notifyEnabled = enabled) }
 
@@ -159,6 +171,7 @@ class RemindersViewModel(
                         dueDateEpochDay = current.dueDateEpochDay,
                         dueTimeMinutes = current.dueTimeMinutes,
                         repeatType = current.repeatType.name,
+                        repeatDaysMask = current.repeatDaysMask,
                         priority = current.priority.name,
                         notifyEnabled = current.notifyEnabled,
                         isCompleted = existing?.isCompleted ?: false,
@@ -175,6 +188,7 @@ class RemindersViewModel(
                         dueDateEpochDay = current.dueDateEpochDay,
                         dueTimeMinutes = current.dueTimeMinutes,
                         repeatType = current.repeatType.name,
+                        repeatDaysMask = current.repeatDaysMask,
                         priority = current.priority.name,
                         notifyEnabled = current.notifyEnabled
                     )

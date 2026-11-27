@@ -6,11 +6,14 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.pager.HorizontalPager
@@ -27,6 +30,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -35,6 +40,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.edutrack.AppContainer
 import com.example.edutrack.R
+import com.example.edutrack.data.preferences.AlarmToneOption
 import com.example.edutrack.ui.components.ClayBottomNavBar
 import com.example.edutrack.ui.components.ClayNavTab
 import com.example.edutrack.ui.components.LiveFocusBar
@@ -141,13 +147,31 @@ fun EduTrackNavHost(
     )
 
     val notificationsState by notificationsViewModel.uiState.collectAsStateWithLifecycle()
-    val timerState by focusTimerManager.state.collectAsStateWithLifecycle()
     val prefsState by userPreferencesManager.state.collectAsStateWithLifecycle()
 
     val unreadCount = notificationsState.unreadCount
-    val showLiveBar = timerState.isActive &&
-        timerState.isMinimized &&
-        currentRoute != Screen.FocusTimer.route
+    val showLiveBar by remember(focusTimerManager, currentRoute) {
+        focusTimerManager.state.map { state ->
+            state.isActive &&
+                state.isMinimized &&
+                !state.isBarHidden &&
+                currentRoute != Screen.FocusTimer.route &&
+                currentRoute != Screen.Me.route &&
+                !currentRoute.startsWith("add_edit_subject")
+        }.distinctUntilChanged()
+    }.collectAsStateWithLifecycle(initialValue = false)
+
+    LaunchedEffect(pagerState.currentPage) {
+        val state = focusTimerManager.state.value
+        if (
+            pagerState.currentPage == 2 &&
+            state.isActive &&
+            state.isMinimized &&
+            state.isBarHidden
+        ) {
+            focusTimerManager.unhideLiveBar()
+        }
+    }
 
     Scaffold(
         modifier = modifier,
@@ -167,8 +191,10 @@ fun EduTrackNavHost(
                     ) + fadeIn(),
                     exit = slideOutVertically(targetOffsetY = { it / 2 }) + fadeOut()
                 ) {
+                    val timerState by focusTimerManager.state.collectAsStateWithLifecycle()
                     LiveFocusBar(
                         timerState = timerState,
+                        modifier = if (!isTopLevelScreen) Modifier.navigationBarsPadding() else Modifier,
                         onExpandClick = {
                             focusTimerManager.expand()
                             navController.navigate(Screen.FocusTimer.route) {
@@ -181,7 +207,8 @@ fun EduTrackNavHost(
                             } else {
                                 focusTimerManager.togglePauseResume()
                             }
-                        }
+                        },
+                        onSwipeDismiss = { focusTimerManager.hideLiveBar() }
                     )
                 }
 
@@ -204,7 +231,43 @@ fun EduTrackNavHost(
         NavHost(
             navController = navController,
             startDestination = MAIN_TABS_ROUTE,
-            modifier = Modifier.padding(innerPadding)
+            modifier = Modifier.padding(innerPadding),
+            enterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { it / 3 },
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioLowBouncy,
+                        stiffness = Spring.StiffnessMediumLow
+                    )
+                ) + fadeIn(animationSpec = tween(220))
+            },
+            exitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { -it / 4 },
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioLowBouncy,
+                        stiffness = Spring.StiffnessMediumLow
+                    )
+                ) + fadeOut(animationSpec = tween(180))
+            },
+            popEnterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { -it / 4 },
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioLowBouncy,
+                        stiffness = Spring.StiffnessMediumLow
+                    )
+                ) + fadeIn(animationSpec = tween(220))
+            },
+            popExitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { it / 3 },
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioLowBouncy,
+                        stiffness = Spring.StiffnessMediumLow
+                    )
+                ) + fadeOut(animationSpec = tween(180))
+            }
         ) {
             composable(MAIN_TABS_ROUTE) {
                 val historyViewModel: HistoryViewModel = viewModel(
@@ -216,7 +279,7 @@ fun EduTrackNavHost(
 
                 HorizontalPager(
                     state = pagerState,
-                    beyondViewportPageCount = 2,
+                    beyondViewportPageCount = 1,
                     modifier = Modifier.fillMaxSize()
                 ) { page ->
                     when (page) {
@@ -421,6 +484,7 @@ fun EduTrackNavHost(
                     ) + fadeOut(tween(300))
                 }
             ) {
+                val timerState by focusTimerManager.state.collectAsStateWithLifecycle()
                 FocusTimerScreen(
                     timerState = timerState,
                     onMinimizeClick = {
@@ -480,6 +544,8 @@ fun EduTrackNavHost(
                     onDueDateSelected = remindersViewModel::onDueDateSelected,
                     onDueTimeSelected = remindersViewModel::onDueTimeSelected,
                     onRepeatSelected = remindersViewModel::onRepeatTypeSelected,
+                    onToggleRepeatDayBit = remindersViewModel::onToggleRepeatDayBit,
+                    onRepeatDaysMaskChanged = remindersViewModel::onRepeatDaysMaskChanged,
                     onPrioritySelected = remindersViewModel::onPrioritySelected,
                     onNotifyToggle = remindersViewModel::onNotifyToggle,
                     onSaveClick = remindersViewModel::saveReminder
@@ -517,7 +583,11 @@ fun EduTrackNavHost(
                     onEditClick = { id ->
                         navController.navigate(Screen.AddEditReminder.createRoute(id))
                     },
-                    onDeleteConfirm = remindersViewModel::deleteReminder
+                    onDeleteConfirm = remindersViewModel::deleteReminder,
+                    onPreviewAlertClick = {
+                        focusTimerManager.previewAlarmTone(AlarmToneOption.fromName(prefsState.alarmTone))
+                        showFeedbackSnackbar("Playing due reminder alert preview")
+                    }
                 )
             }
 

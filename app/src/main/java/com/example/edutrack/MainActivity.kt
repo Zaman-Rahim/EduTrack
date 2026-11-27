@@ -4,6 +4,7 @@ import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import android.view.Display
+import android.view.Surface
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
@@ -70,8 +71,16 @@ class MainActivity : ComponentActivity() {
             .maxByOrNull { it.refreshRate } ?: return
 
         val params = window.attributes
+        var changed = false
         if (params.preferredDisplayModeId != bestMode.modeId) {
             params.preferredDisplayModeId = bestMode.modeId
+            changed = true
+        }
+        if (params.preferredRefreshRate != bestMode.refreshRate) {
+            params.preferredRefreshRate = bestMode.refreshRate
+            changed = true
+        }
+        if (changed) {
             window.attributes = params
         }
     }

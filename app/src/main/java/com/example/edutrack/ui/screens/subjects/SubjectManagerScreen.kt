@@ -3,6 +3,7 @@ package com.example.edutrack.ui.screens.subjects
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -49,7 +50,6 @@ import com.example.edutrack.ui.theme.CardLightGreen
 import com.example.edutrack.ui.theme.ForestGreenDark
 import com.example.edutrack.ui.theme.ForestGreenPrimary
 import com.example.edutrack.ui.theme.LimeAccent
-import com.example.edutrack.ui.theme.subjectPastelContainer
 import com.example.edutrack.ui.viewmodel.SubjectItemUi
 import com.example.edutrack.ui.viewmodel.SubjectManagerUiState
 import com.example.edutrack.util.DateTimeUtils
@@ -206,7 +206,8 @@ private fun ReadySubjectTodoCard(
     onCardClick: () -> Unit,
     onEditClick: () -> Unit
 ) {
-    val containerBg = subjectPastelContainer(item.subject.colorHex)
+    val tagColor = Color(item.subject.colorHex)
+    val badgeBg = tagColor.copy(alpha = 0.28f)
     val remainingMinutes = (item.subject.dailyGoalMinutes - item.todayMinutesLogged).coerceAtLeast(1)
     val targetText = if (item.todayMinutesLogged > 0) {
         "${DateTimeUtils.formatDuration(remainingMinutes)} left today · ${DateTimeUtils.formatDuration(item.subject.dailyGoalMinutes)} goal"
@@ -238,7 +239,8 @@ private fun ReadySubjectTodoCard(
                     modifier = Modifier
                         .size(42.dp)
                         .clip(RoundedCornerShape(14.dp))
-                        .background(containerBg),
+                        .background(badgeBg)
+                        .border(1.5.dp, tagColor, RoundedCornerShape(14.dp)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
@@ -252,14 +254,25 @@ private fun ReadySubjectTodoCard(
                 Spacer(modifier = Modifier.width(12.dp))
 
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = item.subject.name,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(9.dp)
+                                .clip(CircleShape)
+                                .background(tagColor)
+                        )
+                        Text(
+                            text = item.subject.name,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = targetText,
@@ -326,6 +339,7 @@ private fun CompletedSubjectTodoCard(
     onEditClick: () -> Unit,
     onRestartFocusClick: () -> Unit
 ) {
+    val tagColor = Color(item.subject.colorHex)
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -358,16 +372,27 @@ private fun CompletedSubjectTodoCard(
             Spacer(modifier = Modifier.width(14.dp))
 
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = item.subject.name,
-                    style = MaterialTheme.typography.titleSmall.copy(
-                        textDecoration = TextDecoration.LineThrough
-                    ),
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(9.dp)
+                            .clip(CircleShape)
+                            .background(tagColor)
+                    )
+                    Text(
+                        text = item.subject.name,
+                        style = MaterialTheme.typography.titleSmall.copy(
+                            textDecoration = TextDecoration.LineThrough
+                        ),
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = "${DateTimeUtils.formatDuration(item.todayMinutesLogged)} logged · Daily goal reached",

@@ -1,6 +1,14 @@
 package com.example.edutrack.ui.screens.reminders
 
-import androidx.compose.animation.animateColorAsState
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -11,29 +19,22 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TimePicker
-import androidx.compose.material3.rememberDatePickerState
-import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -44,10 +45,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.edutrack.data.local.entity.ReminderPriority
 import com.example.edutrack.data.local.entity.ReminderRepeatType
+import com.example.edutrack.ui.components.FigmaCustomDateTimeScreen
 import com.example.edutrack.ui.components.bounceClick
 import com.example.edutrack.ui.theme.ForestGreenDark
 import com.example.edutrack.ui.theme.ForestGreenPrimary
@@ -56,10 +59,17 @@ import com.example.edutrack.ui.viewmodel.ReminderEditorState
 import com.example.edutrack.ui.viewmodel.RemindersViewModel
 import com.example.edutrack.util.DateTimeUtils
 
+private enum class ReminderEditorStep {
+    MAIN,
+    DATE_TIME_PICKS,
+    CUSTOM_CALENDAR,
+    REPEAT_PICKER
+}
+
 /**
- * Exact Figma `24:45` ("Reminder editor") screen for creating or editing a reminder.
+ * Exact Figma `24:45` ("Reminder editor"), `24:65` ("Date & time"),
+ * `24:1179` ("Custom date & time Calendar"), and `24:75` ("Repeat reminder").
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddEditReminderScreen(
     state: ReminderEditorState,
@@ -69,20 +79,150 @@ fun AddEditReminderScreen(
     onDueDateSelected: (Long) -> Unit,
     onDueTimeSelected: (Int) -> Unit,
     onRepeatSelected: (ReminderRepeatType) -> Unit,
+    onToggleRepeatDayBit: (Int) -> Unit = {},
+    onRepeatDaysMaskChanged: (Int) -> Unit = {},
     onPrioritySelected: (ReminderPriority) -> Unit,
     onNotifyToggle: (Boolean) -> Unit,
     onSaveClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var showDatePicker by remember { mutableStateOf(false) }
-    var showTimePicker by remember { mutableStateOf(false) }
-    var showRepeatMenu by remember { mutableStateOf(false) }
+    var currentStep by remember { mutableStateOf(ReminderEditorStep.MAIN) }
 
+    BackHandler(enabled = currentStep != ReminderEditorStep.MAIN) {
+        currentStep = when (currentStep) {
+            ReminderEditorStep.CUSTOM_CALENDAR -> ReminderEditorStep.DATE_TIME_PICKS
+            ReminderEditorStep.DATE_TIME_PICKS, ReminderEditorStep.REPEAT_PICKER -> ReminderEditorStep.MAIN
+            ReminderEditorStep.MAIN -> ReminderEditorStep.MAIN
+        }
+    }
+
+    val todayEpoch = DateTimeUtils.todayEpochDay()
+    val dateLabel = when (state.dueDateEpochDay) {
+        todayEpoch -> "Today"
+        todayEpoch + 1 -> "Tomorrow"
+        todayEpoch - 1 -> "Yesterday"
+        else -> DateTimeUtils.formatShortDate(state.dueDateEpochDay)
+    }
+    val timeLabel = RemindersViewModel.formatTimeOfDay(state.dueTimeMinutes)
+    val dateAndTimeSummary = "$dateLabel · $timeLabel"
+
+    val repeatSummary = remember(state.repeatType, state.repeatDaysMask) {
+        if (state.repeatType != ReminderRepeatType.CUSTOM) {
+            state.repeatType.label
+        } else {
+            val shortDays = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+            val active = shortDays.filterIndexed { i, _ -> (state.repeatDaysMask and (1 shl i)) != 0 }
+            if (active.isEmpty()) "Does not repeat" else active.joinToString(" · ")
+        }
+    }
+
+    AnimatedContent(
+        targetState = currentStep,
+        transitionSpec = {
+            (slideInHorizontally(
+                initialOffsetX = { if (targetState == ReminderEditorStep.MAIN) -it / 3 else it / 3 },
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioLowBouncy,
+                    stiffness = Spring.StiffnessMediumLow
+                )
+            ) + fadeIn()) togetherWith (slideOutHorizontally(
+                targetOffsetX = { if (targetState == ReminderEditorStep.MAIN) it / 3 else -it / 3 },
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioLowBouncy,
+                    stiffness = Spring.StiffnessMediumLow
+                )
+            ) + fadeOut())
+        },
+        modifier = modifier.fillMaxSize(),
+        label = "reminder_editor_steps"
+    ) { step ->
+        when (step) {
+            ReminderEditorStep.MAIN -> {
+                ReminderEditorMainView(
+                    state = state,
+                    dateAndTimeSummary = dateAndTimeSummary,
+                    repeatSummary = repeatSummary,
+                    onBackClick = onBackClick,
+                    onTitleChanged = onTitleChanged,
+                    onNotesChanged = onNotesChanged,
+                    onOpenDateTimePicker = { currentStep = ReminderEditorStep.DATE_TIME_PICKS },
+                    onOpenRepeatPicker = { currentStep = ReminderEditorStep.REPEAT_PICKER },
+                    onPrioritySelected = onPrioritySelected,
+                    onNotifyToggle = onNotifyToggle,
+                    onSaveClick = onSaveClick
+                )
+            }
+
+            ReminderEditorStep.DATE_TIME_PICKS -> {
+                ReminderDateTimePicksView(
+                    currentSelectionText = dateAndTimeSummary,
+                    onBackClick = { currentStep = ReminderEditorStep.MAIN },
+                    onQuickPickSelected = { epochDay, mins ->
+                        onDueDateSelected(epochDay)
+                        onDueTimeSelected(mins)
+                        currentStep = ReminderEditorStep.MAIN
+                    },
+                    onOpenCustomCalendar = { currentStep = ReminderEditorStep.CUSTOM_CALENDAR }
+                )
+            }
+
+            ReminderEditorStep.CUSTOM_CALENDAR -> {
+                FigmaCustomDateTimeScreen(
+                    title = "Custom date & time",
+                    confirmLabel = "Use date & time",
+                    initialEpochDay = state.dueDateEpochDay,
+                    initialTimeMinutes = state.dueTimeMinutes,
+                    showTimeSection = true,
+                    onBackClick = { currentStep = ReminderEditorStep.DATE_TIME_PICKS },
+                    onConfirm = { epochDay, timeMinutes ->
+                        onDueDateSelected(epochDay)
+                        onDueTimeSelected(timeMinutes)
+                        currentStep = ReminderEditorStep.MAIN
+                    }
+                )
+            }
+
+            ReminderEditorStep.REPEAT_PICKER -> {
+                ReminderRepeatPickerView(
+                    selectedRepeatType = state.repeatType,
+                    selectedDaysMask = state.repeatDaysMask,
+                    repeatSummary = repeatSummary,
+                    onBackClick = { currentStep = ReminderEditorStep.MAIN },
+                    onRepeatSelected = { type ->
+                        onRepeatSelected(type)
+                        currentStep = ReminderEditorStep.MAIN
+                    },
+                    onToggleDayBit = onToggleRepeatDayBit,
+                    onUseSelectedWeekdays = {
+                        onRepeatDaysMaskChanged(state.repeatDaysMask)
+                        currentStep = ReminderEditorStep.MAIN
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReminderEditorMainView(
+    state: ReminderEditorState,
+    dateAndTimeSummary: String,
+    repeatSummary: String,
+    onBackClick: () -> Unit,
+    onTitleChanged: (String) -> Unit,
+    onNotesChanged: (String) -> Unit,
+    onOpenDateTimePicker: () -> Unit,
+    onOpenRepeatPicker: () -> Unit,
+    onPrioritySelected: (ReminderPriority) -> Unit,
+    onNotifyToggle: (Boolean) -> Unit,
+    onSaveClick: () -> Unit
+) {
     val isEdit = state.editingId != null
 
     Column(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxSize()
+            .navigationBarsPadding()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -110,14 +250,9 @@ fun AddEditReminderScreen(
             )
         }
 
+        // TASK TITLE
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(
-                text = "TASK TITLE",
-                fontSize = 10.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                letterSpacing = 0.8.sp
-            )
+            SectionEyebrow("TASK TITLE")
             OutlinedTextField(
                 value = state.title,
                 onValueChange = onTitleChanged,
@@ -136,200 +271,146 @@ fun AddEditReminderScreen(
             )
         }
 
+        // DATE & TIME (single Figma clickable box opening `24:65` Date & time picker)
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(
-                text = "DATE & TIME",
-                fontSize = 10.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                letterSpacing = 0.8.sp
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            SectionEyebrow("DATE & TIME")
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(58.dp)
+                    .bounceClick(onClick = onOpenDateTimePicker),
+                shape = RoundedCornerShape(15.dp),
+                color = MaterialTheme.colorScheme.surface,
+                border = BorderStroke(1.dp, Color(0xFFCCD8C4))
             ) {
-                Surface(
-                    shape = RoundedCornerShape(15.dp),
-                    color = MaterialTheme.colorScheme.surface,
-                    border = BorderStroke(1.dp, Color(0xFFCCD8C4)),
+                Row(
                     modifier = Modifier
-                        .weight(1f)
-                        .height(54.dp)
-                        .bounceClick { showDatePicker = true }
+                        .fillMaxSize()
+                        .padding(horizontal = 15.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Box(
-                        modifier = Modifier.padding(horizontal = 15.dp),
-                        contentAlignment = Alignment.CenterStart
-                    ) {
-                        Text(
-                            text = DateTimeUtils.formatShortDate(state.dueDateEpochDay),
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                }
-                Surface(
-                    shape = RoundedCornerShape(15.dp),
-                    color = MaterialTheme.colorScheme.surface,
-                    border = BorderStroke(1.dp, Color(0xFFCCD8C4)),
-                    modifier = Modifier
-                        .weight(0.8f)
-                        .height(54.dp)
-                        .bounceClick { showTimePicker = true }
-                ) {
-                    Box(
-                        modifier = Modifier.padding(horizontal = 15.dp),
-                        contentAlignment = Alignment.CenterStart
-                    ) {
-                        Text(
-                            text = RemindersViewModel.formatTimeOfDay(state.dueTimeMinutes),
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
+                    Text(
+                        text = dateAndTimeSummary,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                    Text(
+                        text = "›",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         }
 
-        // Repeat selector
+        // REPEAT (single Figma clickable box opening `24:75` Repeat reminder)
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(
-                text = "REPEAT",
-                fontSize = 10.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                letterSpacing = 0.8.sp
-            )
-            Box {
-                Surface(
-                    shape = RoundedCornerShape(15.dp),
-                    color = MaterialTheme.colorScheme.surface,
-                    border = BorderStroke(1.dp, Color(0xFFCCD8C4)),
+            SectionEyebrow("REPEAT")
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(54.dp)
+                    .bounceClick(onClick = onOpenRepeatPicker),
+                shape = RoundedCornerShape(15.dp),
+                color = MaterialTheme.colorScheme.surface,
+                border = BorderStroke(1.dp, Color(0xFFCCD8C4))
+            ) {
+                Row(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(54.dp)
-                        .bounceClick { showRepeatMenu = true }
+                        .fillMaxSize()
+                        .padding(horizontal = 15.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Box(
-                        modifier = Modifier.padding(horizontal = 15.dp),
-                        contentAlignment = Alignment.CenterStart
-                    ) {
-                        Text(
-                            text = state.repeatType.label,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                }
-                DropdownMenu(
-                    expanded = showRepeatMenu,
-                    onDismissRequest = { showRepeatMenu = false }
-                ) {
-                    ReminderRepeatType.entries.forEach { repeat ->
-                        DropdownMenuItem(
-                            text = { Text(repeat.label) },
-                            onClick = {
-                                onRepeatSelected(repeat)
-                                showRepeatMenu = false
-                            }
-                        )
-                    }
+                    Text(
+                        text = repeatSummary,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                    Text(
+                        text = "›",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         }
 
-        // Priority buttons (Low | Normal | High)
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(
-                text = "PRIORITY",
-                fontSize = 10.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                letterSpacing = 0.8.sp
-            )
+        // PRIORITY (3 separate Figma pill cards: Low, Normal, High)
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            SectionEyebrow("PRIORITY")
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 ReminderPriority.entries.forEach { priority ->
-                    val selected = state.priority == priority
-                    val bg by animateColorAsState(
-                        targetValue = if (selected) ForestGreenPrimary else MaterialTheme.colorScheme.surface,
-                        label = "priority_bg"
-                    )
-                    val txt by animateColorAsState(
-                        targetValue = if (selected) Color.White else MaterialTheme.colorScheme.onSurface,
-                        label = "priority_txt"
-                    )
-                    Box(
+                    val isSelected = state.priority == priority
+                    Surface(
                         modifier = Modifier
                             .weight(1f)
-                            .height(50.dp)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(bg)
+                            .height(52.dp)
                             .bounceClick { onPrioritySelected(priority) },
-                        contentAlignment = Alignment.Center
+                        shape = RoundedCornerShape(16.dp),
+                        color = if (isSelected) ForestGreenPrimary else MaterialTheme.colorScheme.surface
                     ) {
-                        Text(
-                            text = priority.label,
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.SemiBold,
-                            color = txt
-                        )
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(
+                                text = priority.label,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (isSelected) Color.White else MaterialTheme.colorScheme.onBackground
+                            )
+                        }
                     }
                 }
             }
+            Text(
+                text = state.priority.label,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
 
-        // Notification toggle row
+        // Notification setting row (`24:580`)
         Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(54.dp)
+                .bounceClick { onNotifyToggle(!state.notifyEnabled) },
             shape = RoundedCornerShape(15.dp),
-            color = MaterialTheme.colorScheme.surface,
-            modifier = Modifier.fillMaxWidth()
+            color = MaterialTheme.colorScheme.surface
         ) {
             Row(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
-                    Text(
-                        text = "Notification",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = if (state.notifyEnabled) "On · at time of reminder" else "Muted",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = ForestGreenPrimary
-                    )
-                }
-                Switch(
-                    checked = state.notifyEnabled,
-                    onCheckedChange = onNotifyToggle,
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = LimeAccent,
-                        checkedTrackColor = ForestGreenPrimary
-                    )
+                Text(
+                    text = "Notification",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+                Text(
+                    text = if (state.notifyEnabled) "On · at time of reminder" else "Off · silent task",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = if (state.notifyEnabled) ForestGreenPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
 
-        // Notes
+        // NOTES
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(
-                text = "NOTES",
-                fontSize = 10.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                letterSpacing = 0.8.sp
-            )
+            SectionEyebrow("NOTES")
             OutlinedTextField(
                 value = state.notes,
                 onValueChange = onNotesChanged,
@@ -351,72 +432,303 @@ fun AddEditReminderScreen(
 
         Button(
             onClick = onSaveClick,
-            shape = RoundedCornerShape(18.dp),
+            shape = RoundedCornerShape(16.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = ForestGreenPrimary,
                 contentColor = Color.White
             ),
             modifier = Modifier
                 .fillMaxWidth()
-                .height(56.dp)
+                .height(52.dp)
                 .bounceClick(onClick = onSaveClick)
         ) {
             Text(
                 text = if (isEdit) "Save changes" else "Save reminder",
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold
             )
         }
     }
+}
 
-    if (showDatePicker) {
-        val pickerState = rememberDatePickerState(
-            initialSelectedDateMillis = DateTimeUtils.epochDayToUtcMillis(state.dueDateEpochDay)
+/**
+ * Exact Figma `24:65` ("EduTrack · Reminder date and time") Quick Picks screen.
+ */
+@Composable
+private fun ReminderDateTimePicksView(
+    currentSelectionText: String,
+    onBackClick: () -> Unit,
+    onQuickPickSelected: (epochDay: Long, timeMinutes: Int) -> Unit,
+    onOpenCustomCalendar: () -> Unit
+) {
+    val today = DateTimeUtils.todayEpochDay()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .navigationBarsPadding()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 24.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Text(
+            text = "‹  Reminder",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Medium,
+            color = ForestGreenPrimary,
+            modifier = Modifier.bounceClick(onClick = onBackClick)
         )
-        DatePickerDialog(
-            onDismissRequest = { showDatePicker = false },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        pickerState.selectedDateMillis?.let {
-                            onDueDateSelected(DateTimeUtils.utcMillisToEpochDay(it))
-                        }
-                        showDatePicker = false
-                    }
-                ) {
-                    Text("Confirm", color = ForestGreenPrimary, fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
-            }
+
+        Column {
+            Text(
+                text = "Date & time",
+                style = MaterialTheme.typography.headlineMedium.copy(fontSize = 28.sp),
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = "Choose when you would like a nudge.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        SectionEyebrow("QUICK PICKS")
+
+        QuickPickTile(
+            title = "Today · 9:00 AM",
+            subtitle = "A morning reminder",
+            onClick = { onQuickPickSelected(today, 9 * 60) }
+        )
+        QuickPickTile(
+            title = "Today · 5:00 PM",
+            subtitle = "Later this afternoon",
+            onClick = { onQuickPickSelected(today, 17 * 60) }
+        )
+        QuickPickTile(
+            title = "Tomorrow · 8:00 PM",
+            subtitle = "Tomorrow evening",
+            onClick = { onQuickPickSelected(today + 1, 20 * 60) }
+        )
+        QuickPickTile(
+            title = "Choose date & time",
+            subtitle = "Open calendar and time picker",
+            onClick = onOpenCustomCalendar
+        )
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = ForestGreenPrimary)
         ) {
-            DatePicker(state = pickerState)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 18.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    text = "CURRENT SELECTION",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color(0xFFD4E0D5),
+                    letterSpacing = 0.8.sp
+                )
+                Text(
+                    text = currentSelectionText,
+                    style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp),
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.White
+                )
+            }
         }
     }
+}
 
-    if (showTimePicker) {
-        val timeState = rememberTimePickerState(
-            initialHour = state.dueTimeMinutes / 60,
-            initialMinute = state.dueTimeMinutes % 60
-        )
-        AlertDialog(
-            onDismissRequest = { showTimePicker = false },
-            title = { Text("Reminder time", fontWeight = FontWeight.SemiBold) },
-            text = { TimePicker(state = timeState) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        onDueTimeSelected(timeState.hour * 60 + timeState.minute)
-                        showTimePicker = false
-                    }
-                ) {
-                    Text("Confirm", color = ForestGreenPrimary, fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showTimePicker = false }) { Text("Cancel") }
-            }
-        )
+@Composable
+private fun QuickPickTile(
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(78.dp)
+            .bounceClick(onClick = onClick),
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surface
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 18.dp),
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = title,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = subtitle,
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
+}
+
+/**
+ * Exact Figma `24:75` ("EduTrack · Repeat reminder") screen with presets and custom weekdays.
+ */
+@Composable
+private fun ReminderRepeatPickerView(
+    selectedRepeatType: ReminderRepeatType,
+    selectedDaysMask: Int,
+    repeatSummary: String,
+    onBackClick: () -> Unit,
+    onRepeatSelected: (ReminderRepeatType) -> Unit,
+    onToggleDayBit: (Int) -> Unit,
+    onUseSelectedWeekdays: () -> Unit
+) {
+    val presets = listOf(
+        ReminderRepeatType.NONE,
+        ReminderRepeatType.DAILY,
+        ReminderRepeatType.WEEKLY,
+        ReminderRepeatType.MONTHLY
+    )
+    val dayLetters = listOf("M", "T", "W", "T", "F", "S", "S")
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .navigationBarsPadding()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 24.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Text(
+            text = "‹  Reminder",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Medium,
+            color = ForestGreenPrimary,
+            modifier = Modifier.bounceClick(onClick = onBackClick)
+        )
+
+        Column {
+            Text(
+                text = "Repeat reminder",
+                style = MaterialTheme.typography.headlineMedium.copy(fontSize = 28.sp),
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = "Build a rhythm that works for you.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        presets.forEach { preset ->
+            val selected = selectedRepeatType == preset
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(54.dp)
+                    .bounceClick { onRepeatSelected(preset) },
+                shape = RoundedCornerShape(16.dp),
+                color = if (selected) ForestGreenPrimary else MaterialTheme.colorScheme.surface
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        text = preset.label,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (selected) Color.White else MaterialTheme.colorScheme.onBackground
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
+        SectionEyebrow("CUSTOM WEEKDAYS")
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            dayLetters.forEachIndexed { index, letter ->
+                val active = (selectedDaysMask and (1 shl index)) != 0
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(if (active) ForestGreenPrimary else MaterialTheme.colorScheme.surface)
+                        .bounceClick { onToggleDayBit(index) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = letter,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (active) Color.White else ForestGreenDark
+                    )
+                }
+            }
+        }
+
+        Text(
+            text = "Select any combination of days. Each selected day will use the reminder's chosen time.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        Button(
+            onClick = onUseSelectedWeekdays,
+            shape = RoundedCornerShape(16.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = ForestGreenPrimary,
+                contentColor = Color.White
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp)
+                .bounceClick(onClick = onUseSelectedWeekdays)
+        ) {
+            Text(
+                text = "Use selected weekdays",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            SectionEyebrow("CURRENT REPEAT")
+            Text(
+                text = repeatSummary,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+        }
+    }
+}
+
+@Composable
+private fun SectionEyebrow(text: String) {
+    Text(
+        text = text,
+        fontSize = 10.sp,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        letterSpacing = 0.8.sp,
+        textAlign = TextAlign.Start
+    )
 }

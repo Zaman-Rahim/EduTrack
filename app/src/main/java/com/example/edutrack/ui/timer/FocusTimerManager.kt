@@ -39,6 +39,7 @@ data class FocusTimerUiState(
     val remainingSeconds: Int = 0,
     val status: TimerStatus = TimerStatus.IDLE,
     val isMinimized: Boolean = false,
+    val isBarHidden: Boolean = false,
     val isAlarmRinging: Boolean = false
 ) {
     val isActive: Boolean get() = status != TimerStatus.IDLE
@@ -77,7 +78,8 @@ class FocusTimerManager(
             totalSeconds = totalSec,
             remainingSeconds = totalSec,
             status = TimerStatus.RUNNING,
-            isMinimized = false
+            isMinimized = false,
+            isBarHidden = false
         )
         startTicker()
     }
@@ -97,11 +99,19 @@ class FocusTimerManager(
     }
 
     fun minimize() {
-        _state.update { it.copy(isMinimized = true) }
+        _state.update { it.copy(isMinimized = true, isBarHidden = false) }
     }
 
     fun expand() {
-        _state.update { it.copy(isMinimized = false) }
+        _state.update { it.copy(isMinimized = false, isBarHidden = false) }
+    }
+
+    fun hideLiveBar() {
+        _state.update { it.copy(isBarHidden = true) }
+    }
+
+    fun unhideLiveBar() {
+        _state.update { it.copy(isBarHidden = false) }
     }
 
     fun dismissOrCancel() {

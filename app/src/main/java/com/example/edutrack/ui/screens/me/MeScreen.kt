@@ -18,6 +18,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -499,28 +501,165 @@ fun MeScreen(
     }
 
     if (showReminderTimePicker) {
-        val timeState = rememberTimePickerState(
-            initialHour = prefs.dailyReminderTimeMinutes / 60,
-            initialMinute = prefs.dailyReminderTimeMinutes % 60
-        )
-        AlertDialog(
-            onDismissRequest = { showReminderTimePicker = false },
-            title = { Text("Daily study reminder", fontWeight = FontWeight.SemiBold) },
-            text = { TimePicker(state = timeState) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        onReminderTimeChanged(timeState.hour * 60 + timeState.minute)
-                        showReminderTimePicker = false
+        var useCustomClockPicker by remember { mutableStateOf(false) }
+        if (useCustomClockPicker) {
+            val timeState = rememberTimePickerState(
+                initialHour = prefs.dailyReminderTimeMinutes / 60,
+                initialMinute = prefs.dailyReminderTimeMinutes % 60
+            )
+            AlertDialog(
+                onDismissRequest = {
+                    useCustomClockPicker = false
+                    showReminderTimePicker = false
+                },
+                title = { Text("Custom reminder time", fontWeight = FontWeight.SemiBold) },
+                text = { TimePicker(state = timeState) },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            onReminderTimeChanged(timeState.hour * 60 + timeState.minute)
+                            useCustomClockPicker = false
+                            showReminderTimePicker = false
+                        }
+                    ) {
+                        Text("Save", color = ForestGreenPrimary, fontWeight = FontWeight.Bold)
                     }
-                ) {
-                    Text("Save", color = ForestGreenPrimary, fontWeight = FontWeight.Bold)
+                },
+                dismissButton = {
+                    TextButton(onClick = { useCustomClockPicker = false }) { Text("Back") }
                 }
-            },
-            dismissButton = {
-                TextButton(onClick = { showReminderTimePicker = false }) { Text("Cancel") }
+            )
+        } else {
+            // Exact Figma `19:215` Study reminder preset dialog
+            androidx.compose.ui.window.Dialog(
+                onDismissRequest = { showReminderTimePicker = false }
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(24.dp),
+                    color = MaterialTheme.colorScheme.background,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.CenterHorizontally)
+                                .width(100.dp)
+                                .height(4.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(Color(0xFFC5D1BD))
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Study reminder",
+                            style = MaterialTheme.typography.titleLarge.copy(fontSize = 22.sp),
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
+                        Text(
+                            text = "Choose a gentle nudge to get started.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        val presets = listOf(
+                            7 * 60 to "7:00 AM",
+                            19 * 60 to "7:00 PM",
+                            21 * 60 to "9:00 PM"
+                        )
+                        presets.forEach { (mins, label) ->
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp)
+                                    .bounceClick {
+                                        onReminderTimeChanged(mins)
+                                        showReminderTimePicker = false
+                                    },
+                                shape = RoundedCornerShape(14.dp),
+                                color = MaterialTheme.colorScheme.surface
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(horizontal = 14.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.ic_figma_clock),
+                                        contentDescription = null,
+                                        tint = ForestGreenPrimary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Text(
+                                        text = label,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onBackground,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.ic_figma_arrow),
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(46.dp)
+                                .bounceClick { useCustomClockPicker = true },
+                            shape = RoundedCornerShape(14.dp),
+                            color = MaterialTheme.colorScheme.surface
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(horizontal = 14.dp),
+                                contentAlignment = Alignment.CenterStart
+                            ) {
+                                Text(
+                                    text = "Custom time...",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Medium,
+                                    color = ForestGreenPrimary
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Button(
+                            onClick = { showReminderTimePicker = false },
+                            shape = RoundedCornerShape(16.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = CardLightGreen,
+                                contentColor = ForestGreenPrimary
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
+                                .bounceClick { showReminderTimePicker = false }
+                        ) {
+                            Text(
+                                text = "Cancel",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
             }
-        )
+        }
     }
 
     if (showAlarmToneDialog) {
@@ -584,21 +723,86 @@ fun MeScreen(
     }
 
     if (showAboutDialog) {
-        AlertDialog(
-            onDismissRequest = { showAboutDialog = false },
-            title = { Text("About EduTrack", fontWeight = FontWeight.Bold) },
-            text = {
-                Text(
-                    "EduTrack v1.0\n\n" +
-                        "An offline-first personal study routine tracker built with Kotlin, " +
-                        "Jetpack Compose (Material 3), Room Database, and MVVM architecture."
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = { showAboutDialog = false }) {
-                    Text("Done", color = ForestGreenPrimary, fontWeight = FontWeight.Bold)
+        // Exact Figma `19:216` About EduTrack sheet/dialog
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { showAboutDialog = false }
+        ) {
+            Surface(
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.background,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.CenterHorizontally)
+                            .width(100.dp)
+                            .height(4.dp)
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(Color(0xFFC5D1BD))
+                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(52.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(ForestGreenPrimary),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                                contentDescription = "EduTrack logo",
+                                tint = Color.Unspecified,
+                                modifier = Modifier.size(44.dp)
+                            )
+                        }
+                        Text(
+                            text = "EduTrack",
+                            style = MaterialTheme.typography.headlineSmall.copy(fontSize = 24.sp),
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
+                    }
+                    Text(
+                        text = "Study Progress Tracker · Version ${BuildConfig.VERSION_NAME}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "Build a steady study habit. Set daily goals, focus on one subject at a time, and keep your progress close — on your own device.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        lineHeight = 19.sp
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Button(
+                        onClick = { showAboutDialog = false },
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = ForestGreenPrimary,
+                            contentColor = Color.White
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(50.dp)
+                            .bounceClick { showAboutDialog = false }
+                    ) {
+                        Text(
+                            text = "Got it",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
                 }
             }
-        )
+        }
     }
 }

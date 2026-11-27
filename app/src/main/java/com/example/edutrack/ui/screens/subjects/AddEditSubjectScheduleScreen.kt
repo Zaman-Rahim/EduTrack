@@ -54,8 +54,10 @@ import androidx.compose.ui.unit.sp
 import com.example.edutrack.R
 import com.example.edutrack.data.local.entity.SubjectEntity
 import com.example.edutrack.data.local.entity.SubjectRepeatMode
+import com.example.edutrack.ui.components.ClaySegmentedControl
 import com.example.edutrack.ui.components.ConfirmDeleteDialog
 import com.example.edutrack.ui.components.FigmaBackButton
+import com.example.edutrack.ui.components.FigmaCustomDateTimeScreen
 import com.example.edutrack.ui.components.bounceClick
 import com.example.edutrack.ui.theme.DeleteRedBg
 import com.example.edutrack.ui.theme.DeleteRedText
@@ -90,6 +92,25 @@ fun AddEditSubjectScheduleScreen(
 ) {
     var showDatePicker by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
+
+    if (showDatePicker) {
+        androidx.activity.compose.BackHandler(enabled = true) {
+            showDatePicker = false
+        }
+        FigmaCustomDateTimeScreen(
+            title = "Select start date",
+            confirmLabel = "Use start date",
+            initialEpochDay = formState.startDateEpochDay,
+            showTimeSection = false,
+            allowPastDates = true,
+            onBackClick = { showDatePicker = false },
+            onConfirm = { epochDay, _ ->
+                onStartDateSelected(epochDay)
+                showDatePicker = false
+            }
+        )
+        return
+    }
 
     val isEdit = formState.editingSubjectId != null
 
@@ -148,7 +169,7 @@ fun AddEditSubjectScheduleScreen(
             value = formState.name,
             onValueChange = onNameChanged,
             label = { Text("Subject name") },
-            placeholder = { Text("Chemistry") },
+            placeholder = { Text("Enter subject name") },
             singleLine = true,
             shape = RoundedCornerShape(16.dp),
             colors = OutlinedTextFieldDefaults.colors(
@@ -345,52 +366,22 @@ fun AddEditSubjectScheduleScreen(
                 color = ForestGreenDark
             )
 
-            Surface(
-                shape = RoundedCornerShape(15.dp),
-                color = Color(0xFFDEE8D4),
-                border = BorderStroke(1.dp, Color(0xFFC5D5B7)),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(3.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    val modes = listOf(
-                        SubjectRepeatMode.ONCE to "Once",
-                        SubjectRepeatMode.EVERY_DAY to "Every day",
-                        SubjectRepeatMode.CUSTOM to "Custom days"
-                    )
-                    modes.forEach { (mode, label) ->
-                        val selected = formState.repeatMode == mode
-                        val bg by animateColorAsState(
-                            targetValue = if (selected) ForestGreenPrimary else Color.Transparent,
-                            label = "repeat_bg"
-                        )
-                        val textColor by animateColorAsState(
-                            targetValue = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
-                            label = "repeat_text"
-                        )
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(36.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(bg)
-                                .bounceClick { onRepeatModeSelected(mode) },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = label,
-                                fontSize = 12.sp,
-                                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-                                color = textColor
-                            )
-                        }
-                    }
-                }
+            val repeatModes = remember {
+                listOf(
+                    SubjectRepeatMode.ONCE,
+                    SubjectRepeatMode.EVERY_DAY,
+                    SubjectRepeatMode.CUSTOM
+                )
             }
+            val repeatOptions = remember { listOf("Once", "Every day", "Custom days") }
+            val selectedRepeatIndex = repeatModes.indexOf(formState.repeatMode).coerceAtLeast(0)
+            ClaySegmentedControl(
+                options = repeatOptions,
+                selectedIndex = selectedRepeatIndex,
+                onOptionSelected = { index ->
+                    onRepeatModeSelected(repeatModes[index])
+                }
+            )
 
             // 7-day interactive weekday chips
             AnimatedVisibility(visible = formState.repeatMode == SubjectRepeatMode.CUSTOM) {
@@ -502,34 +493,6 @@ fun AddEditSubjectScheduleScreen(
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
             )
-        }
-    }
-
-    if (showDatePicker) {
-        val datePickerState = rememberDatePickerState(
-            initialSelectedDateMillis = DateTimeUtils.epochDayToUtcMillis(formState.startDateEpochDay)
-        )
-        DatePickerDialog(
-            onDismissRequest = { showDatePicker = false },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        datePickerState.selectedDateMillis?.let { millis ->
-                            onStartDateSelected(DateTimeUtils.utcMillisToEpochDay(millis))
-                        }
-                        showDatePicker = false
-                    }
-                ) {
-                    Text("Confirm", color = ForestGreenPrimary, fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) {
-                    Text("Cancel")
-                }
-            }
-        ) {
-            DatePicker(state = datePickerState)
         }
     }
 

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -46,6 +47,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -105,8 +107,8 @@ fun ClayBottomNavBar(
             ) {
                 val tabWidth = maxWidth / tabs.size
                 val pillWidth = 62.dp
-                val pillHeight = 34.dp
-                val pillTopOffset = 10.dp
+                val pillHeight = 40.dp
+                val pillTopOffset = 7.dp
 
                 // Zero-recomposition GPU-driven sliding 3D clay-textured LimeAccent pill
                 ClayIndicatorPill(
@@ -131,89 +133,21 @@ fun ClayBottomNavBar(
                         .size(width = pillWidth, height = pillHeight)
                 )
 
-                // Tab items
+                // Tab items (isolated sub-composables to prevent unselected tab recompositions)
                 Row(
                     modifier = Modifier.fillMaxSize(),
                     verticalAlignment = Alignment.Top
                 ) {
                     tabs.forEachIndexed { index, tab ->
-                        val isSelected = index == safeSelectedIndex
-                        val interactionSource = remember(index) { MutableInteractionSource() }
-
-                        val iconScaleX by animateFloatAsState(
-                            targetValue = if (isSelected) 1.14f else 1.0f,
-                            animationSpec = spring(
-                                dampingRatio = Spring.DampingRatioMediumBouncy,
-                                stiffness = Spring.StiffnessMediumLow
-                            ),
-                            label = "clayIconScaleX_$index"
+                        ClayNavTabItem(
+                            tab = tab,
+                            isSelected = index == safeSelectedIndex,
+                            unselectedColor = unselectedColor,
+                            isDarkTheme = isDarkTheme,
+                            pillHeight = pillHeight,
+                            pillTopOffset = pillTopOffset,
+                            onTabSelected = { onTabSelected(index) }
                         )
-                        val iconScaleY by animateFloatAsState(
-                            targetValue = if (isSelected) 1.08f else 1.0f,
-                            animationSpec = spring(
-                                dampingRatio = Spring.DampingRatioMediumBouncy,
-                                stiffness = Spring.StiffnessMediumLow
-                            ),
-                            label = "clayIconScaleY_$index"
-                        )
-
-                        val iconTint by animateColorAsState(
-                            targetValue = if (isSelected) ForestGreenPrimary else unselectedColor,
-                            label = "clayIconTint_$index"
-                        )
-                        val labelColor by animateColorAsState(
-                            targetValue = if (isSelected) {
-                                if (isDarkTheme) LimeAccent else ForestGreenPrimary
-                            } else {
-                                unselectedColor
-                            },
-                            label = "clayLabelColor_$index"
-                        )
-
-                        Column(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxHeight()
-                                .clickable(
-                                    interactionSource = interactionSource,
-                                    indication = null,
-                                    role = Role.Tab,
-                                    onClick = { onTabSelected(index) }
-                                )
-                                .padding(top = pillTopOffset),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Top
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .height(pillHeight)
-                                    .fillMaxWidth(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    painter = painterResource(id = tab.iconRes),
-                                    contentDescription = tab.label,
-                                    tint = iconTint,
-                                    modifier = Modifier
-                                        .size(21.dp)
-                                        .graphicsLayer {
-                                            scaleX = iconScaleX
-                                            scaleY = iconScaleY
-                                        }
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.height(4.dp))
-
-                            Text(
-                                text = tab.label,
-                                color = labelColor,
-                                fontSize = 11.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium
-                            )
-                        }
                     }
                 }
             }
@@ -221,9 +155,97 @@ fun ClayBottomNavBar(
     }
 }
 
+@Composable
+private fun RowScope.ClayNavTabItem(
+    tab: ClayNavTab,
+    isSelected: Boolean,
+    unselectedColor: Color,
+    isDarkTheme: Boolean,
+    pillHeight: Dp,
+    pillTopOffset: Dp,
+    onTabSelected: () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+
+    val iconScaleX by animateFloatAsState(
+        targetValue = if (isSelected) 1.14f else 1.0f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "clayIconScaleX"
+    )
+    val iconScaleY by animateFloatAsState(
+        targetValue = if (isSelected) 1.08f else 1.0f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "clayIconScaleY"
+    )
+
+    val iconTint by animateColorAsState(
+        targetValue = if (isSelected) ForestGreenPrimary else unselectedColor,
+        label = "clayIconTint"
+    )
+    val labelColor by animateColorAsState(
+        targetValue = if (isSelected) {
+            if (isDarkTheme) LimeAccent else ForestGreenPrimary
+        } else {
+            unselectedColor
+        },
+        label = "clayLabelColor"
+    )
+
+    Column(
+        modifier = Modifier
+            .weight(1f)
+            .fillMaxHeight()
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                role = Role.Tab,
+                onClick = onTabSelected
+            )
+            .padding(top = pillTopOffset),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Top
+    ) {
+        Box(
+            modifier = Modifier
+                .height(pillHeight)
+                .fillMaxWidth(),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                painter = painterResource(id = tab.iconRes),
+                contentDescription = tab.label,
+                tint = iconTint,
+                modifier = Modifier
+                    .size(21.dp)
+                    .graphicsLayer {
+                        scaleX = iconScaleX
+                        scaleY = iconScaleY
+                    }
+            )
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        Text(
+            text = tab.label,
+            color = labelColor,
+            fontSize = 11.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium
+        )
+    }
+}
+
 /**
- * Soft 3D clay-textured pill indicator with subtle top inner highlight, bottom rim shadow,
- * and horizontal rubber-band stretch during pager transitions.
+ * Flat Figma LimeAccent sliding pill indicator with continuous rubber-band stretch
+ * during pager swipe transitions (no 3D bevels or heavy drop shadows).
  */
 @Composable
 private fun ClayIndicatorPill(
@@ -231,38 +253,11 @@ private fun ClayIndicatorPill(
     modifier: Modifier = Modifier
 ) {
     val pillShape = RoundedCornerShape(50)
-    val topHighlight = lerp(LimeAccent, Color.White, 0.28f)
-    val bottomShade = lerp(LimeAccent, ForestGreenPrimary, 0.12f)
-    val shadowColor = if (isDarkTheme) {
-        Color.Black.copy(alpha = 0.45f)
-    } else {
-        ForestGreenPrimary.copy(alpha = 0.22f)
-    }
+    val pillColor = if (isDarkTheme) LimeAccent else LimeAccent
 
     Box(
         modifier = modifier
-            .shadow(
-                elevation = 4.dp,
-                shape = pillShape,
-                ambientColor = shadowColor,
-                spotColor = shadowColor
-            )
             .clip(pillShape)
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(topHighlight, LimeAccent, bottomShade)
-                )
-            )
-            .border(
-                width = 1.25.dp,
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        Color.White.copy(alpha = 0.72f),
-                        Color.Transparent,
-                        ForestGreenPrimary.copy(alpha = 0.20f)
-                    )
-                ),
-                shape = pillShape
-            )
+            .background(pillColor)
     )
 }
