@@ -72,6 +72,7 @@ jobs:
 
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release delete "$TAG" --yes --cleanup-tag || true
+            sleep 2
           fi
 
           gh release create "$TAG" dist/EduTrack-debug.apk "dist/EduTrack-v1.0.${{ github.run_number }}.apk" \
@@ -79,3 +80,4 @@ jobs:
             --title "$TITLE" \
             --notes-file dist/release_notes.md \
             --latest
+          gh release edit "$TAG" --draft=false --latest
