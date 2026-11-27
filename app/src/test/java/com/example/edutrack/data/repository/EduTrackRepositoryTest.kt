@@ -128,10 +128,6 @@ class EduTrackRepositoryTest {
             }
         }
 
-        override suspend fun deleteSession(session: StudySessionEntity) {
-            sessionsFlow.value = sessionsFlow.value.filterNot { it.id == session.id }
-        }
-
         override suspend fun deleteSessionById(sessionId: Long) {
             sessionsFlow.value = sessionsFlow.value.filterNot { it.id == sessionId }
         }
@@ -270,5 +266,58 @@ class EduTrackRepositoryTest {
 
         repo.deleteReminderById(reminderId)
         assertNull(repo.getReminderById(reminderId))
+    }
+
+    @Test
+    fun repository_deleteSessionById_removesSessionAndUpdatesTotals() = runBlocking {
+        val repo = createRepository()
+
+        val subjectId = repo.insertSubject(
+            SubjectEntity(name = "Algorithms", colorHex = 0xFF0EA5E9, weeklyGoalHours = 5.0)
+        )
+        val sessionId = repo.insertSession(
+            StudySessionEntity(
+                subjectId = subjectId,
+                durationMinutes = 45,
+                sessionDateEpochDay = 20051L,
+                notes = "Dynamic programming practice"
+            )
+        )
+        assertEquals(45, repo.observeTotalMinutesInRange(20050L, 20052L).first())
+
+        repo.deleteSessionById(sessionId)
+
+        assertNull(repo.getSessionById(sessionId))
+        assertEquals(0, repo.observeTotalMinutesInRange(20050L, 20052L).first())
+    }
+
+    @Test
+    fun repository_clearAllNotifications_clearsInboxAndUnreadCount() = runBlocking {
+        val repo = createRepository()
+
+        repo.insertNotification(
+            NotificationEntity(
+                title = "Focus complete",
+                message = "Logged 25 min for Algorithms",
+                type = NotificationType.FOCUS_COMPLETE.name,
+                isRead = false
+            )
+        )
+        repo.insertNotification(
+            NotificationEntity(
+                title = "Reminder due",
+                message = "Review lecture notes",
+                type = NotificationType.REMINDER.name,
+                isRead = true
+            )
+        )
+
+        assertEquals(2, repo.observeAllNotifications().first().size)
+        assertEquals(1, repo.observeUnreadNotificationCount().first())
+
+        repo.clearAllNotifications()
+
+        assertTrue(repo.observeAllNotifications().first().isEmpty())
+        assertEquals(0, repo.observeUnreadNotificationCount().first())
     }
 }

@@ -6,13 +6,12 @@ import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -20,12 +19,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.MenuBook
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenuItem
@@ -36,6 +29,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
@@ -48,22 +42,25 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.edutrack.R
+import com.example.edutrack.ui.components.ClayButton
+import com.example.edutrack.ui.components.ClaySegmentedControl
 import com.example.edutrack.ui.components.EmptyStateCard
 import com.example.edutrack.ui.components.FigmaBackButton
-import com.example.edutrack.ui.theme.ForestGreenPrimary
-import com.example.edutrack.ui.theme.TrackBorder
 import com.example.edutrack.ui.theme.subjectPastelContainer
 import com.example.edutrack.ui.viewmodel.AddEditSessionUiState
 import com.example.edutrack.util.DateTimeUtils
+import java.time.LocalDate
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddEditSessionScreen(
     uiState: AddEditSessionUiState,
@@ -80,15 +77,26 @@ fun AddEditSessionScreen(
     var showDatePicker by remember { mutableStateOf(false) }
 
     val selectedSubject = uiState.subjects.firstOrNull { it.id == uiState.selectedSubjectId }
+    val durationPresets = remember { listOf(25, 45, 60) }
+    val presetLabels = remember(durationPresets) {
+        durationPresets.map { DateTimeUtils.formatDuration(it) } + "Custom"
+    }
+    val durationFocusRequester = remember { FocusRequester() }
+    val selectedPresetIndex = remember(uiState.durationText) {
+        val parsed = uiState.durationText.trim().toIntOrNull()
+        val matchedIdx = durationPresets.indexOf(parsed)
+        if (matchedIdx >= 0) matchedIdx else durationPresets.size
+    }
 
     Column(
         modifier = modifier
             .fillMaxSize()
+            .imePadding()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Exact Figma Header: 42dp white circular back button + Title
+        // Exact Figma Header: 42dp circular back button + Title
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp)
@@ -98,8 +106,22 @@ fun AddEditSessionScreen(
                 text = if (uiState.isEditMode) "Edit study session" else "Log study session",
                 style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp),
                 fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onBackground
+                color = MaterialTheme.colorScheme.onBackground,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
+        }
+
+        val notFoundError = uiState.notFoundError
+        if (notFoundError != null) {
+            EmptyStateCard(
+                iconRes = R.drawable.ic_figma_info,
+                title = "Study session not found",
+                description = notFoundError,
+                actionLabel = "Go Back",
+                onActionClick = onBackClick
+            )
+            return@Column
         }
 
         Text(
@@ -110,7 +132,7 @@ fun AddEditSessionScreen(
 
         if (uiState.subjects.isEmpty()) {
             EmptyStateCard(
-                icon = Icons.AutoMirrored.Outlined.MenuBook,
+                iconRes = R.drawable.ic_figma_book,
                 title = "No subjects available",
                 description = "Add at least one subject before logging a study session.",
                 actionLabel = "Go to Subjects",
@@ -127,7 +149,7 @@ fun AddEditSessionScreen(
             letterSpacing = 0.8.sp
         )
 
-        // Subject selector dropdown (Figma 16dp rounded card with 24dp 8dp-rounded swatch)
+        // Subject selector dropdown (16dp rounded card with 24dp 8dp-rounded swatch)
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(
                 text = "Subject",
@@ -169,8 +191,8 @@ fun AddEditSessionScreen(
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedContainerColor = MaterialTheme.colorScheme.surface,
                         unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                        focusedBorderColor = ForestGreenPrimary,
-                        unfocusedBorderColor = Color.Transparent
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline
                     ),
                     isError = uiState.subjectError != null,
                     supportingText = uiState.subjectError?.let { error ->
@@ -209,7 +231,7 @@ fun AddEditSessionScreen(
             }
         }
 
-        // Duration input + Figma quick presets
+        // Duration input + sliding Clay quick presets
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
                 text = "Duration",
@@ -240,8 +262,8 @@ fun AddEditSessionScreen(
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedContainerColor = MaterialTheme.colorScheme.surface,
                     unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                    focusedBorderColor = ForestGreenPrimary,
-                    unfocusedBorderColor = Color.Transparent
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
                 ),
                 isError = uiState.durationError != null,
                 supportingText = {
@@ -254,34 +276,31 @@ fun AddEditSessionScreen(
                         Text(preview)
                     }
                 },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(durationFocusRequester)
             )
 
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
                     text = "Quick add",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .align(Alignment.CenterVertically)
-                        .padding(end = 4.dp)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                listOf(25, 45, 60).forEach { preset ->
-                    val isSelected = uiState.durationText == preset.toString()
-                    AssistChip(
-                        onClick = { onDurationChanged(preset.toString()) },
-                        label = { Text("$preset min") },
-                        shape = RoundedCornerShape(19.dp),
-                        border = null,
-                        colors = AssistChipDefaults.assistChipColors(
-                            containerColor = if (isSelected) ForestGreenPrimary else MaterialTheme.colorScheme.surface,
-                            labelColor = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface
-                        )
-                    )
-                }
+                ClaySegmentedControl(
+                    options = presetLabels,
+                    selectedIndex = selectedPresetIndex,
+                    onOptionSelected = { index ->
+                        if (index in durationPresets.indices) {
+                            onDurationChanged(durationPresets[index].toString())
+                        } else {
+                            if (uiState.durationText.trim().toIntOrNull() in durationPresets) {
+                                onDurationChanged("")
+                            }
+                            durationFocusRequester.requestFocus()
+                        }
+                    }
+                )
             }
         }
 
@@ -328,8 +347,8 @@ fun AddEditSessionScreen(
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedContainerColor = MaterialTheme.colorScheme.surface,
                     unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                    focusedBorderColor = ForestGreenPrimary,
-                    unfocusedBorderColor = Color.Transparent
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
                 ),
                 isError = uiState.dateError != null,
                 supportingText = uiState.dateError?.let { error -> { Text(error) } },
@@ -367,8 +386,8 @@ fun AddEditSessionScreen(
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedContainerColor = MaterialTheme.colorScheme.surface,
                     unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                    focusedBorderColor = ForestGreenPrimary,
-                    unfocusedBorderColor = Color.Transparent
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
                 ),
                 isError = uiState.notesError != null,
                 supportingText = {
@@ -384,20 +403,19 @@ fun AddEditSessionScreen(
 
         Spacer(modifier = Modifier.height(6.dp))
 
-        Button(
+        ClayButton(
             onClick = onSaveClick,
             enabled = !uiState.isSaving,
             shape = RoundedCornerShape(18.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = ForestGreenPrimary,
-                contentColor = Color.White
-            ),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp)
+            height = 56.dp,
+            modifier = Modifier.fillMaxWidth()
         ) {
             Text(
-                text = if (uiState.isEditMode) "Save changes" else "Save session",
+                text = when {
+                    uiState.isSaving -> "Saving..."
+                    uiState.isEditMode -> "Save changes"
+                    else -> "Save session"
+                },
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
             )
@@ -405,8 +423,19 @@ fun AddEditSessionScreen(
     }
 
     if (showDatePicker) {
+        val todayEpoch = DateTimeUtils.todayEpochDay()
+        val todayUtcMillis = remember(todayEpoch) { DateTimeUtils.epochDayToUtcMillis(todayEpoch) }
+        val maxYear = remember { LocalDate.now().year }
+        val clampedInitialEpoch = uiState.sessionDateEpochDay.coerceAtMost(todayEpoch)
         val datePickerState = rememberDatePickerState(
-            initialSelectedDateMillis = DateTimeUtils.epochDayToUtcMillis(uiState.sessionDateEpochDay)
+            initialSelectedDateMillis = DateTimeUtils.epochDayToUtcMillis(clampedInitialEpoch),
+            selectableDates = object : SelectableDates {
+                override fun isSelectableDate(utcTimeMillis: Long): Boolean =
+                    utcTimeMillis <= todayUtcMillis
+
+                override fun isSelectableYear(year: Int): Boolean =
+                    year <= maxYear
+            }
         )
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
@@ -414,12 +443,19 @@ fun AddEditSessionScreen(
                 TextButton(
                     onClick = {
                         datePickerState.selectedDateMillis?.let { millis ->
-                            onDateSelected(DateTimeUtils.utcMillisToEpochDay(millis))
+                            val pickedEpoch = DateTimeUtils.utcMillisToEpochDay(millis)
+                            if (pickedEpoch <= todayEpoch) {
+                                onDateSelected(pickedEpoch)
+                            }
                         }
                         showDatePicker = false
                     }
                 ) {
-                    Text("Confirm", color = ForestGreenPrimary, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = "Confirm",
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             },
             dismissButton = {

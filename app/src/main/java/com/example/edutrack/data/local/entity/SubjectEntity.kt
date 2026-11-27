@@ -2,7 +2,6 @@ package com.example.edutrack.data.local.entity
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
-import java.time.DayOfWeek
 import java.time.LocalDate
 
 /**
@@ -65,16 +64,6 @@ data class SubjectEntity(
                 else if (active.isEmpty()) "No days selected"
                 else active.joinToString(" · ")
             }
-        }
-    }
-
-    companion object {
-        fun maskForDays(days: Set<DayOfWeek>): Int {
-            var mask = 0
-            days.forEach { day ->
-                mask = mask or (1 shl (day.value - 1))
-            }
-            return mask
         }
     }
 }

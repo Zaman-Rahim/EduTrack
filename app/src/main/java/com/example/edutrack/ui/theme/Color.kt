@@ -7,7 +7,6 @@ import androidx.compose.ui.graphics.luminance
 // EduTrack Figma Design System Colors
 val ForestGreenPrimary = Color(0xFF194D3E)
 val ForestGreenDark = Color(0xFF183D33)
-val ForestGreenDeep = Color(0xFF122E26)
 val LimeAccent = Color(0xFFD8F478)
 val LimeLight = Color(0xFFE9F8B5)
 
@@ -21,14 +20,14 @@ val ChartMutedBarGreen = Color(0xFF82A38C)
 
 // Soft Pastel Accent Palette for Subjects & Cards (Exact Figma Swatches)
 val PastelLavender = Color(0xFFE9E2F7)
-val PastelLime = Color(0xFFD8F478)
 val PastelPeach = Color(0xFFF7E8D5)
-val PastelLilac = Color(0xFFF0DDEA)
 val PastelTeal = Color(0xFFDCEBF2)
 
 // Destructive / Warning actions (Exact Figma Session Details Delete Pill)
 val DeleteRedBg = Color(0xFFF9E7E2)
 val DeleteRedText = Color(0xFFA14336)
+val DeleteRedBgDark = Color(0xFF42221F)
+val DeleteRedTextDark = Color(0xFFF4AEA4)
 
 // Dark Theme Variants
 val DarkBackgroundFigma = Color(0xFF0F1E19)

@@ -1,7 +1,6 @@
 package com.example.edutrack.data.local.dao
 
 import androidx.room.Dao
-import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
@@ -44,9 +43,6 @@ interface StudySessionDao {
 
     @Update
     suspend fun updateSession(session: StudySessionEntity)
-
-    @Delete
-    suspend fun deleteSession(session: StudySessionEntity)
 
     @Query("DELETE FROM study_sessions WHERE id = :sessionId")
     suspend fun deleteSessionById(sessionId: Long)

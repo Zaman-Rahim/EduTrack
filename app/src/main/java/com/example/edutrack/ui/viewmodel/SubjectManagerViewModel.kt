@@ -7,6 +7,9 @@ import com.example.edutrack.data.local.entity.SubjectRepeatMode
 import com.example.edutrack.data.repository.EduTrackRepository
 import com.example.edutrack.ui.theme.SubjectTagPalette
 import com.example.edutrack.util.DateTimeUtils
+import com.example.edutrack.util.ValidationUtils
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -19,12 +22,10 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 
 /**
- * Subject row with daily To-Do & weekly aggregate metrics.
+ * Subject row with daily To-Do progress metrics.
  */
 data class SubjectItemUi(
     val subject: SubjectEntity,
-    val sessionCount: Int,
-    val totalMinutesLogged: Int,
     val todayMinutesLogged: Int,
     val isScheduledToday: Boolean,
     val isCompletedToday: Boolean
@@ -43,7 +44,11 @@ data class SubjectFormState(
     val selectedDaysMask: Int = 127,
     val selectedColorHex: Long = SubjectTagPalette.first(),
     val nameError: String? = null,
-    val goalError: String? = null
+    val goalError: String? = null,
+    val scheduleError: String? = null,
+    val isSaving: Boolean = false,
+    val isLoading: Boolean = false,
+    val notFoundError: String? = null
 ) {
     val dailyTotalMinutes: Int
         get() {
@@ -75,6 +80,8 @@ data class SubjectManagerUiState(
 sealed interface SubjectManagerEvent {
     data class Feedback(val message: String) : SubjectManagerEvent
     data object SavedSuccess : SubjectManagerEvent
+    data class DeletedSuccess(val message: String) : SubjectManagerEvent
+    data class ErrorMessage(val message: String) : SubjectManagerEvent
 }
 
 /**
@@ -88,6 +95,8 @@ class SubjectManagerViewModel(
 
     private val _events = Channel<SubjectManagerEvent>(Channel.BUFFERED)
     val events = _events.receiveAsFlow()
+
+    private var loadJob: Job? = null
 
     val uiState: StateFlow<SubjectManagerUiState> = combine(
         repository.observeSubjectsWithSessions(),
@@ -104,8 +113,6 @@ class SubjectManagerViewModel(
             val completed = scheduled && todayMinutes >= item.subject.dailyGoalMinutes
             SubjectItemUi(
                 subject = item.subject,
-                sessionCount = item.sessions.size,
-                totalMinutesLogged = item.sessions.sumOf { it.durationMinutes },
                 todayMinutesLogged = todayMinutes,
                 isScheduledToday = scheduled,
                 isCompletedToday = completed
@@ -126,7 +133,7 @@ class SubjectManagerViewModel(
         initialValue = SubjectManagerUiState()
     )
 
-    fun prepareNewSubject() {
+    private fun prepareNewSubject() {
         formState.value = SubjectFormState(
             selectedColorHex = SubjectTagPalette.first(),
             startDateEpochDay = DateTimeUtils.todayEpochDay()
@@ -134,26 +141,47 @@ class SubjectManagerViewModel(
     }
 
     fun loadSubjectForEdit(subjectId: Long) {
+        loadJob?.cancel()
         if (subjectId <= 0L) {
             prepareNewSubject()
             return
         }
-        viewModelScope.launch {
-            val subject = repository.getSubjectById(subjectId)
-            if (subject != null) {
-                val hours = subject.dailyGoalMinutes / 60
-                val mins = subject.dailyGoalMinutes % 60
-                val mode = runCatching { SubjectRepeatMode.valueOf(subject.repeatMode) }
-                    .getOrDefault(SubjectRepeatMode.EVERY_DAY)
+        formState.value = SubjectFormState(
+            editingSubjectId = subjectId,
+            isLoading = true
+        )
+        loadJob = viewModelScope.launch {
+            try {
+                val subject = repository.getSubjectById(subjectId)
+                if (subject != null) {
+                    val hours = subject.dailyGoalMinutes / 60
+                    val mins = subject.dailyGoalMinutes % 60
+                    val mode = runCatching { SubjectRepeatMode.valueOf(subject.repeatMode) }
+                        .getOrDefault(SubjectRepeatMode.EVERY_DAY)
+                    formState.value = SubjectFormState(
+                        editingSubjectId = subject.id,
+                        name = subject.name,
+                        dailyHoursText = hours.toString(),
+                        dailyMinutesText = mins.toString(),
+                        startDateEpochDay = subject.startDateEpochDay,
+                        repeatMode = mode,
+                        selectedDaysMask = subject.scheduledDaysMask,
+                        selectedColorHex = subject.colorHex,
+                        isLoading = false
+                    )
+                } else {
+                    formState.value = SubjectFormState(
+                        editingSubjectId = subjectId,
+                        isLoading = false,
+                        notFoundError = "This subject no longer exists."
+                    )
+                }
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 formState.value = SubjectFormState(
-                    editingSubjectId = subject.id,
-                    name = subject.name,
-                    dailyHoursText = hours.toString(),
-                    dailyMinutesText = mins.toString(),
-                    startDateEpochDay = subject.startDateEpochDay,
-                    repeatMode = mode,
-                    selectedDaysMask = subject.scheduledDaysMask,
-                    selectedColorHex = subject.colorHex
+                    editingSubjectId = subjectId,
+                    isLoading = false,
+                    notFoundError = "Unable to load subject details."
                 )
             }
         }
@@ -184,7 +212,7 @@ class SubjectManagerViewModel(
                 SubjectRepeatMode.CUSTOM -> if (current.selectedDaysMask == 0) 0b0010101 else current.selectedDaysMask
                 SubjectRepeatMode.ONCE -> current.selectedDaysMask
             }
-            current.copy(repeatMode = mode, selectedDaysMask = updatedMask, goalError = null)
+            current.copy(repeatMode = mode, selectedDaysMask = updatedMask, scheduleError = null)
         }
     }
 
@@ -195,7 +223,7 @@ class SubjectManagerViewModel(
             current.copy(
                 repeatMode = SubjectRepeatMode.CUSTOM,
                 selectedDaysMask = toggled,
-                goalError = null
+                scheduleError = null
             )
         }
     }
@@ -206,81 +234,113 @@ class SubjectManagerViewModel(
 
     fun saveSubject() {
         val current = formState.value
+        if (current.isSaving || current.isLoading || current.notFoundError != null) return
         val editingId = current.editingSubjectId ?: 0L
 
+        formState.update { it.copy(isSaving = true) }
+
         viewModelScope.launch {
-            val cleanName = current.name.trim()
-            if (cleanName.isEmpty()) {
-                formState.update { it.copy(nameError = "Subject name is required") }
-                return@launch
-            }
+            try {
+                val cleanName = current.name.trim()
+                val isDuplicate = cleanName.isNotEmpty() &&
+                    repository.isSubjectNameTaken(cleanName, excludeId = editingId)
 
-            val isDuplicate = repository.isSubjectNameTaken(cleanName, excludeId = editingId)
-            if (isDuplicate) {
-                formState.update { it.copy(nameError = "A subject with this name already exists") }
-                return@launch
-            }
-
-            val dailyMinutes = current.dailyTotalMinutes
-            if (dailyMinutes <= 0 || dailyMinutes > 1440) {
-                formState.update {
-                    it.copy(goalError = "Daily study goal must be between 1 minute and 24 hours")
+                val validation = ValidationUtils.validateSubjectSchedule(
+                    name = current.name,
+                    dailyHoursText = current.dailyHoursText,
+                    dailyMinutesText = current.dailyMinutesText,
+                    isCustomMode = current.repeatMode == SubjectRepeatMode.CUSTOM,
+                    scheduledDaysMask = current.selectedDaysMask,
+                    isDuplicateName = isDuplicate
+                )
+                if (!validation.isValid) {
+                    formState.update {
+                        it.copy(
+                            isSaving = false,
+                            nameError = validation.nameError,
+                            goalError = validation.goalError,
+                            scheduleError = validation.scheduleError
+                        )
+                    }
+                    return@launch
                 }
-                return@launch
-            }
 
-            if (current.repeatMode == SubjectRepeatMode.CUSTOM && (current.selectedDaysMask and 127) == 0) {
-                formState.update {
-                    it.copy(goalError = "Select at least one day of the week")
+                val dailyMinutes = current.dailyTotalMinutes
+                val weeklyHours = current.calculatedWeeklyMinutes / 60.0
+                val maskToSave = when (current.repeatMode) {
+                    SubjectRepeatMode.EVERY_DAY -> 127
+                    SubjectRepeatMode.ONCE -> current.selectedDaysMask
+                    SubjectRepeatMode.CUSTOM -> current.selectedDaysMask and 127
                 }
-                return@launch
-            }
 
-            val weeklyHours = (current.calculatedWeeklyMinutes / 60.0).coerceAtLeast(0.1)
-            val maskToSave = when (current.repeatMode) {
-                SubjectRepeatMode.EVERY_DAY -> 127
-                SubjectRepeatMode.ONCE -> current.selectedDaysMask
-                SubjectRepeatMode.CUSTOM -> current.selectedDaysMask and 127
-            }
-
-            if (editingId > 0L) {
-                val existing = repository.getSubjectById(editingId)
-                repository.updateSubject(
-                    SubjectEntity(
-                        id = editingId,
-                        name = cleanName,
-                        colorHex = current.selectedColorHex,
-                        weeklyGoalHours = weeklyHours,
-                        dailyGoalMinutes = dailyMinutes,
-                        repeatMode = current.repeatMode.name,
-                        scheduledDaysMask = maskToSave,
-                        startDateEpochDay = current.startDateEpochDay,
-                        createdAt = existing?.createdAt ?: System.currentTimeMillis()
+                if (editingId > 0L) {
+                    val existing = repository.getSubjectById(editingId)
+                    if (existing == null) {
+                        formState.update {
+                            it.copy(
+                                isSaving = false,
+                                notFoundError = "This subject was deleted."
+                            )
+                        }
+                        return@launch
+                    }
+                    repository.updateSubject(
+                        SubjectEntity(
+                            id = editingId,
+                            name = cleanName,
+                            colorHex = current.selectedColorHex,
+                            weeklyGoalHours = weeklyHours,
+                            dailyGoalMinutes = dailyMinutes,
+                            repeatMode = current.repeatMode.name,
+                            scheduledDaysMask = maskToSave,
+                            startDateEpochDay = current.startDateEpochDay,
+                            createdAt = existing.createdAt
+                        )
+                    )
+                } else {
+                    repository.insertSubject(
+                        SubjectEntity(
+                            name = cleanName,
+                            colorHex = current.selectedColorHex,
+                            weeklyGoalHours = weeklyHours,
+                            dailyGoalMinutes = dailyMinutes,
+                            repeatMode = current.repeatMode.name,
+                            scheduledDaysMask = maskToSave,
+                            startDateEpochDay = current.startDateEpochDay
+                        )
+                    )
+                }
+                formState.update { it.copy(isSaving = false) }
+                _events.send(SubjectManagerEvent.SavedSuccess)
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                formState.update { it.copy(isSaving = false) }
+                _events.send(
+                    SubjectManagerEvent.ErrorMessage(
+                        e.localizedMessage ?: "Failed to save subject"
                     )
                 )
-                _events.send(SubjectManagerEvent.Feedback("Subject \"$cleanName\" updated"))
-            } else {
-                repository.insertSubject(
-                    SubjectEntity(
-                        name = cleanName,
-                        colorHex = current.selectedColorHex,
-                        weeklyGoalHours = weeklyHours,
-                        dailyGoalMinutes = dailyMinutes,
-                        repeatMode = current.repeatMode.name,
-                        scheduledDaysMask = maskToSave,
-                        startDateEpochDay = current.startDateEpochDay
-                    )
-                )
-                _events.send(SubjectManagerEvent.Feedback("Subject \"$cleanName\" added"))
             }
-            _events.send(SubjectManagerEvent.SavedSuccess)
         }
     }
 
     fun deleteSubject(subject: SubjectEntity) {
+        if (formState.value.isSaving) return
+        formState.update { it.copy(isSaving = true) }
         viewModelScope.launch {
-            repository.deleteSubject(subject)
-            _events.send(SubjectManagerEvent.Feedback("Deleted \"${subject.name}\""))
+            try {
+                repository.deleteSubject(subject)
+                formState.update { it.copy(isSaving = false) }
+                _events.send(SubjectManagerEvent.DeletedSuccess("Deleted \"${subject.name}\""))
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                formState.update { it.copy(isSaving = false) }
+                _events.send(
+                    SubjectManagerEvent.ErrorMessage(
+                        e.localizedMessage ?: "Failed to delete subject"
+                    )
+                )
+            }
         }
     }
 }

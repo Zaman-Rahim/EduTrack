@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.edutrack.data.local.relation.SessionWithSubject
 import com.example.edutrack.data.repository.EduTrackRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -47,13 +48,18 @@ class SessionDetailViewModel(
 
     private val _events = Channel<SessionDetailEvent>(Channel.BUFFERED)
     val events = _events.receiveAsFlow()
+    private var isDeleting = false
 
     fun deleteSession() {
+        if (isDeleting) return
+        isDeleting = true
         viewModelScope.launch {
             try {
                 repository.deleteSessionById(sessionId)
                 _events.send(SessionDetailEvent.Deleted("Study session deleted"))
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                isDeleting = false
                 _events.send(
                     SessionDetailEvent.Error(
                         e.localizedMessage ?: "Failed to delete study session"

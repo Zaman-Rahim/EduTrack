@@ -9,6 +9,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,25 +18,20 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.SearchOff
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -43,6 +39,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -51,14 +48,14 @@ import androidx.compose.ui.unit.sp
 import com.example.edutrack.R
 import com.example.edutrack.data.local.entity.ReminderEntity
 import com.example.edutrack.data.local.entity.ReminderPriority
+import com.example.edutrack.ui.components.ClayButton
+import com.example.edutrack.ui.components.ClayOutlinedButton
 import com.example.edutrack.ui.components.EmptyStateCard
 import com.example.edutrack.ui.components.FigmaBackButton
 import com.example.edutrack.ui.components.bounceClick
-import com.example.edutrack.ui.theme.DeleteRedText
 import com.example.edutrack.ui.theme.ForestGreenDark
 import com.example.edutrack.ui.theme.ForestGreenPrimary
 import com.example.edutrack.ui.theme.LimeAccent
-import com.example.edutrack.ui.theme.TrackBorder
 import com.example.edutrack.ui.viewmodel.RemindersViewModel
 import com.example.edutrack.util.DateTimeUtils
 
@@ -81,7 +78,9 @@ fun ReminderDetailScreen(
     onEditClick: (Long) -> Unit,
     onDeleteConfirm: (Long) -> Unit,
     onPreviewAlertClick: () -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isLoading: Boolean = false,
+    onSnoozeTomorrowClick: (ReminderEntity) -> Unit = { onSnoozeClick(it, 12 * 60) }
 ) {
     var currentStep by remember { mutableStateOf(ReminderDetailStep.MAIN) }
 
@@ -97,13 +96,22 @@ fun ReminderDetailScreen(
         ) {
             FigmaBackButton(onClick = onBackClick)
             Spacer(modifier = Modifier.height(16.dp))
-            EmptyStateCard(
-                icon = Icons.Outlined.SearchOff,
-                title = "Reminder not found",
-                description = "This reminder may have been deleted.",
-                actionLabel = "Back to Reminders",
-                onActionClick = onBackClick
-            )
+            if (isLoading) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                }
+            } else {
+                EmptyStateCard(
+                    iconRes = R.drawable.ic_figma_info,
+                    title = "Reminder not found",
+                    description = "This reminder may have been deleted.",
+                    actionLabel = "Back to Reminders",
+                    onActionClick = onBackClick
+                )
+            }
         }
         return
     }
@@ -159,6 +167,10 @@ fun ReminderDetailScreen(
                     onSnoozeSelected = { addMinutes ->
                         onSnoozeClick(reminder, addMinutes)
                         currentStep = ReminderDetailStep.MAIN
+                    },
+                    onSnoozeTomorrow = {
+                        onSnoozeTomorrowClick(reminder)
+                        currentStep = ReminderDetailStep.MAIN
                     }
                 )
             }
@@ -191,7 +203,6 @@ private fun ReminderDetailMainView(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .navigationBarsPadding()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -200,7 +211,7 @@ private fun ReminderDetailMainView(
             text = "‹  Reminders",
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.Medium,
-            color = ForestGreenPrimary,
+            color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.bounceClick(onClick = onBackClick)
         )
 
@@ -253,17 +264,24 @@ private fun ReminderDetailMainView(
             }
         }
 
-        // Single white 3-row info card
+        // Single white/surface 3-row info card
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
         ) {
             Column(modifier = Modifier.fillMaxWidth()) {
                 DetailInfoRow(label = "Repeat", value = repeatLabel)
-                HorizontalDivider(color = TrackBorder.copy(alpha = 0.5f), modifier = Modifier.padding(horizontal = 16.dp))
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f),
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
                 DetailInfoRow(label = "Priority", value = priorityLabel)
-                HorizontalDivider(color = TrackBorder.copy(alpha = 0.5f), modifier = Modifier.padding(horizontal = 16.dp))
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f),
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
                 DetailInfoRow(
                     label = "Notification",
                     value = if (reminder.notifyEnabled) "On · at time of reminder" else "Off · silent task"
@@ -290,17 +308,11 @@ private fun ReminderDetailMainView(
 
         Spacer(modifier = Modifier.height(4.dp))
 
-        Button(
+        ClayButton(
             onClick = onToggleComplete,
             shape = RoundedCornerShape(16.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = ForestGreenPrimary,
-                contentColor = Color.White
-            ),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp)
-                .bounceClick(onClick = onToggleComplete)
+            height = 52.dp,
+            modifier = Modifier.fillMaxWidth()
         ) {
             Icon(
                 painter = painterResource(id = R.drawable.ic_figma_check),
@@ -319,39 +331,31 @@ private fun ReminderDetailMainView(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Surface(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(52.dp)
-                    .bounceClick(onClick = onEditClick),
+            ClayOutlinedButton(
+                onClick = onEditClick,
                 shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.surface
+                height = 52.dp,
+                modifier = Modifier.weight(1f)
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        text = "Edit reminder",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-                }
+                Text(
+                    text = "Edit reminder",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
             }
-            Surface(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(52.dp)
-                    .bounceClick(onClick = onOpenSnooze),
+            ClayButton(
+                onClick = onOpenSnooze,
+                containerColor = LimeAccent,
+                contentColor = ForestGreenDark,
                 shape = RoundedCornerShape(16.dp),
-                color = LimeAccent
+                height = 52.dp,
+                modifier = Modifier.weight(1f)
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        text = "Snooze",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = ForestGreenDark
-                    )
-                }
+                Text(
+                    text = "Snooze",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
             }
         }
 
@@ -360,20 +364,30 @@ private fun ReminderDetailMainView(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            TextButton(onClick = onOpenDelete) {
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .bounceClick(onClick = onOpenDelete)
+                    .padding(horizontal = 10.dp, vertical = 10.dp)
+            ) {
                 Text(
                     text = "Delete reminder",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
-                    color = DeleteRedText
+                    color = MaterialTheme.colorScheme.error
                 )
             }
-            TextButton(onClick = onPreviewAlertClick) {
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .bounceClick(onClick = onPreviewAlertClick)
+                    .padding(horizontal = 10.dp, vertical = 10.dp)
+            ) {
                 Text(
                     text = "Preview due alert  →",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
-                    color = ForestGreenPrimary
+                    color = MaterialTheme.colorScheme.primary
                 )
             }
         }
@@ -388,17 +402,12 @@ private fun SnoozeReminderView(
     reminder: ReminderEntity,
     dueSummary: String,
     onBackClick: () -> Unit,
-    onSnoozeSelected: (Int) -> Unit
+    onSnoozeSelected: (Int) -> Unit,
+    onSnoozeTomorrow: () -> Unit
 ) {
-    val tomorrowMinutesOffset = run {
-        val nextDayMorning = 9 * 60
-        (24 * 60 - reminder.dueTimeMinutes) + nextDayMorning
-    }
-
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .navigationBarsPadding()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -407,7 +416,7 @@ private fun SnoozeReminderView(
             text = "‹  Reminder",
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.Medium,
-            color = ForestGreenPrimary,
+            color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.bounceClick(onClick = onBackClick)
         )
 
@@ -454,26 +463,42 @@ private fun SnoozeReminderView(
 
         Spacer(modifier = Modifier.height(4.dp))
 
-        listOf(
-            10 to "In 10 minutes",
-            30 to "In 30 minutes",
-            60 to "In 1 hour",
-            tomorrowMinutesOffset to "Tomorrow morning"
-        ).forEach { (mins, label) ->
+        val snoozeOptions: List<Pair<String, () -> Unit>> = listOf(
+            "In 10 minutes" to { onSnoozeSelected(10) },
+            "In 30 minutes" to { onSnoozeSelected(30) },
+            "In 1 hour" to { onSnoozeSelected(60) },
+            "Tomorrow morning" to onSnoozeTomorrow
+        )
+
+        snoozeOptions.forEach { (label, onClick) ->
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(52.dp)
-                    .bounceClick { onSnoozeSelected(mins) },
+                    .height(54.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .bounceClick(onClick = onClick),
                 shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.surface
+                color = MaterialTheme.colorScheme.surface,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
             ) {
-                Box(contentAlignment = Alignment.Center) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 18.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
                     Text(
                         text = label,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onBackground
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_figma_arrow),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(16.dp)
                     )
                 }
             }
@@ -500,7 +525,6 @@ private fun DeleteReminderConfirmView(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .navigationBarsPadding()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -509,7 +533,7 @@ private fun DeleteReminderConfirmView(
             text = "‹  Reminder",
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.Medium,
-            color = ForestGreenPrimary,
+            color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.bounceClick(onClick = onBackClick)
         )
 
@@ -531,7 +555,8 @@ private fun DeleteReminderConfirmView(
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(22.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
         ) {
             Column(
                 modifier = Modifier
@@ -543,14 +568,14 @@ private fun DeleteReminderConfirmView(
                     text = "PLEASE CONFIRM",
                     fontSize = 10.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = DeleteRedText,
+                    color = MaterialTheme.colorScheme.error,
                     letterSpacing = 0.8.sp
                 )
                 Text(
                     text = reminderTitle,
                     style = MaterialTheme.typography.headlineSmall.copy(fontSize = 23.sp),
                     fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onBackground
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
                     text = "You can always add a new reminder later.\nYour study subjects will not be affected.",
@@ -562,17 +587,13 @@ private fun DeleteReminderConfirmView(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        Button(
+        ClayButton(
             onClick = onConfirmDelete,
+            containerColor = MaterialTheme.colorScheme.error,
+            contentColor = MaterialTheme.colorScheme.onError,
             shape = RoundedCornerShape(16.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = DeleteRedText,
-                contentColor = Color.White
-            ),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp)
-                .bounceClick(onClick = onConfirmDelete)
+            height = 52.dp,
+            modifier = Modifier.fillMaxWidth()
         ) {
             Text(
                 text = "Delete reminder",
@@ -581,22 +602,17 @@ private fun DeleteReminderConfirmView(
             )
         }
 
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp)
-                .bounceClick(onClick = onBackClick),
+        ClayOutlinedButton(
+            onClick = onBackClick,
             shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.surface
+            height = 52.dp,
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Box(contentAlignment = Alignment.Center) {
-                Text(
-                    text = "Keep reminder",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-            }
+            Text(
+                text = "Keep reminder",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold
+            )
         }
     }
 }
@@ -619,7 +635,7 @@ private fun DetailInfoRow(label: String, value: String) {
             text = value,
             fontSize = 14.sp,
             fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onBackground
+            color = MaterialTheme.colorScheme.onSurface
         )
     }
 }

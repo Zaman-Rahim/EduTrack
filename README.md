@@ -1,152 +1,184 @@
 <div align="center">
 
-# EduTrack — Study Progress Tracker
+# EduTrack — Intelligent Study & Focus Companion
 
-**A modern offline-first Android study planner, session logger, and progress analytics app built with Kotlin, Jetpack Compose, Material 3, and Room.**
+**An ultra-fluid, 120Hz offline-first Android study planner, live focus timer, and academic analytics app built with Kotlin, Jetpack Compose, Material 3, and Room.**
 
 [![Build & Publish EduTrack APK](https://github.com/Zaman-Rahim/EduTrack/actions/workflows/android-apk.yml/badge.svg)](https://github.com/Zaman-Rahim/EduTrack/actions/workflows/android-apk.yml)
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.1.0-7F52FF?style=flat&logo=kotlin&logoColor=white)
 ![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-Material%203-4285F4?style=flat&logo=jetpackcompose&logoColor=white)
 ![Min SDK](https://img.shields.io/badge/API-26%2B-194D3E?style=flat&logo=android&logoColor=white)
-![Architecture](https://img.shields.io/badge/Architecture-MVVM%20%2B%20Room-D8F478?style=flat&labelColor=183D33)
+![APK Size](https://img.shields.io/badge/Release%20APK-1.6%20MB-D8F478?style=flat&labelColor=183D33)
+![Refresh Rate](https://img.shields.io/badge/Display-120Hz%20Smooth-194D3E?style=flat&labelColor=183D33)
 
 <br />
 
-### 📲 Download Latest Test Build on Android
+### 📲 Download Latest Build on Android
 
 [![Download Latest APK](https://img.shields.io/badge/Download-EduTrack--debug.apk-194D3E?style=for-the-badge&logo=android&logoColor=D8F478)](https://github.com/Zaman-Rahim/EduTrack/releases/latest/download/EduTrack-debug.apk)
 &nbsp;
 [![View All Releases](https://img.shields.io/badge/GitHub-Releases-183D33?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Zaman-Rahim/EduTrack/releases/latest)
 
-*Tap **Download EduTrack-debug.apk** directly from your Android phone's browser to install and test the latest build.*
+*Tap **Download EduTrack-debug.apk** directly from your Android browser to install or update the app without losing your study data.*
 
 </div>
 
 ---
 
-## ✨ Overview
+## ✨ What's New in EduTrack 2.0
 
-**EduTrack** helps students build consistent study habits by organizing courses with weekly hour targets, logging focused study sessions with notes, calculating consecutive daily streaks, and visualizing weekly momentum through custom Jetpack Compose charts.
+EduTrack 2.0 is a complete reimagining based on the Figma design system, rebuilt from the ground up for tactile physical feedback, silky 120Hz animations, and a laser-focused study workflow:
 
-Every screen, icon, pastel palette, and interactive component in EduTrack was designed in **Figma** and faithfully translated into **Jetpack Compose + Material 3**, backed by a reactive **Room (SQLite)** offline-first architecture.
+- ⏱️ **Live Focus Timer & Background Service:**
+  - Foreground service with notification controls to keep countdowns alive when minimized.
+  - Interactive **Live Focus Bar** floating above navigation with live countdown and one-tap controls.
+  - YouTube-style fluid vertical modal presentation with smooth deceleration curves.
+  - **Multi-Subject Guard:** Prevents overlapping sessions and seamlessly prompts users to switch or pause.
+  - **Auto-completion screen:** Instantly surfaces the celebration & completion view when the timer reaches `00:00` with ringtone chime.
+- 🎨 **Figma Clay UI System:**
+  - Custom `ClayButton`, `ClayCard`, and `ClayBottomNavBar` with subtle inner shadows, 3D pill elevation, and spring bounce physics.
+  - 100% custom SVG vector drawables replaced heavy icon bundles, slashing APK size down to **1.6 MB**.
+- 🚀 **120Hz Ultra-Fluid Frame Pacing:**
+  - Zero-recomposition `ModifierNodeElement` click effects (`BounceScaleElement`).
+  - Pre-allocated draw paths and hardware-accelerated Canvas render passes.
+  - R8 Full-Mode minification and dead-code stripping.
+- 🔔 **Reminders & Exact Alarms:**
+  - Schedule course reminders with repeat patterns (Daily, Weekdays, Custom days).
+  - Exact alarms using Android `AlarmManager` with high-priority full-screen intent compatibility.
+- 📥 **In-App Notification Center:**
+  - Notification inbox for study milestones, completed sessions, and reminders.
+- 📊 **Custom Canvas Analytics:**
+  - Dynamic 7-day study bar chart with target gridlines, streak tracking, and per-subject weekly goal progress.
+- 🧭 **Intuitive Back Navigation:**
+  - Pressing system back on secondary tabs (History, Subjects, Reminders, Progress) automatically returns to Home before exiting.
 
 ---
 
-## 📱 App Screenshots
+## 📱 Visual Showcase
 
 <table>
   <tr>
-    <td align="center"><strong>Home Dashboard</strong></td>
-    <td align="center"><strong>Session History</strong></td>
-    <td align="center"><strong>Progress & Analytics</strong></td>
+    <td align="center"><strong>Welcome Home</strong></td>
+    <td align="center"><strong>Focus Session</strong></td>
+    <td align="center"><strong>Live Focus Bar</strong></td>
   </tr>
   <tr>
-    <td><img src="docs/screenshots/home.png" width="240" alt="Home Dashboard"/></td>
-    <td><img src="docs/screenshots/history.png" width="240" alt="Session History"/></td>
-    <td><img src="docs/screenshots/progress.png" width="240" alt="Progress & Analytics"/></td>
+    <td><img src="docs/screenshots/v2_1_welcome_home.png" width="260" alt="Welcome Home"/></td>
+    <td><img src="docs/screenshots/v2_4_focus_timer.png" width="260" alt="Focus Session"/></td>
+    <td><img src="docs/screenshots/v2_5_live_focus_bar.png" width="260" alt="Live Focus Bar"/></td>
   </tr>
   <tr>
-    <td align="center"><strong>Log Study Session</strong></td>
-    <td align="center"><strong>Session Details</strong></td>
-    <td align="center"><strong>Subject Manager</strong></td>
+    <td align="center"><strong>Subject Schedule</strong></td>
+    <td align="center"><strong>Reminders</strong></td>
+    <td align="center"><strong>Notification Center</strong></td>
   </tr>
   <tr>
-    <td><img src="docs/screenshots/add_session.png" width="240" alt="Log Study Session"/></td>
-    <td><img src="docs/screenshots/detail.png" width="240" alt="Session Details"/></td>
-    <td><img src="docs/screenshots/subjects.png" width="240" alt="Subject Manager"/></td>
+    <td><img src="docs/screenshots/v2_3_subjects_todo.png" width="260" alt="Subjects"/></td>
+    <td><img src="docs/screenshots/v2_6_reminders.png" width="260" alt="Reminders"/></td>
+    <td><img src="docs/screenshots/v2_8_notifications.png" width="260" alt="Notifications"/></td>
   </tr>
 </table>
 
 ---
 
-## 🚀 Key Features
+## 🏗️ Architecture & Technology Stack
 
-- **Focused Daily Dashboard (`HomeScreen`):**
-  - Displays today's accumulated study duration, active consecutive **study streak** pill, and animated weekly goal progress meter.
-  - Lists active subjects with pastel icon badges and weekly progress summaries, plus one-tap quick logging.
-- **Session Logger & Editor (`AddEditSessionScreen`):**
-  - Full input validation preventing empty fields, invalid numeric durations (`1–1440` min), or missing notes.
-  - Quick-add duration chips (`25 min`, `45 min`, `60 min`) and Material 3 `DatePickerDialog` integration.
-- **Searchable History & Filtering (`HistoryScreen`):**
-  - Real-time search across notes and subjects, paired with subject chips and date-range presets (`All Time`, `Today`, `This Week`, `This Month`, and `Custom` `DateRangePicker`).
-  - Groups sessions chronologically (`Today`, `Yesterday`, and earlier dates) with daily totals.
-- **Session Details & Management (`SessionDetailScreen`):**
-  - Full session reflection view with pastel subject hero card, metadata breakdown, edit navigation, and confirmation-guarded deletion.
-- **Subject Manager (`SubjectManagerScreen`):**
-  - Full Room CRUD for courses with curated pastel color tags, weekly hour targets, duplicate-name protection, and cascade-safe deletion.
-- **Custom Canvas Analytics (`StatsScreen` & `StudyBarChart`):**
-  - Custom Jetpack Compose `Canvas` 7-day bar chart with `1h / 2h / 3h` gridlines, current streak card, per-session averages, and per-subject goal tracking.
-- **Dynamic Light & Dark Theme:**
-  - In-app Light/Dark mode switching with synchronized edge-to-edge system status and navigation bars.
-
----
-
-## 🏗️ Architecture & Tech Stack
-
-EduTrack follows **Clean MVVM Architecture** with unidirectional data flow (`StateFlow` for UI state and `Channel` for one-shot Snackbar/navigation events):
+EduTrack follows **Clean Modern Android Architecture (MVVM)** with Unidirectional Data Flow (UDF):
 
 ```mermaid
-flowchart LR
-    UI["Jetpack Compose UI<br/>(6 Screens + Material 3)"] -->|User Intents| VM["ViewModels<br/>(StateFlow + Channel)"]
-    VM -->|Suspend / Flow| Repo["OfflineEduTrackRepository"]
-    Repo -->|Queries / CRUD| DAO["Room DAOs<br/>(SubjectDao, StudySessionDao)"]
-    DAO <--> DB[("SQLite Database<br/>EduTrackDatabase")]
+flowchart TD
+    subgraph UI ["Presentation Layer (Jetpack Compose)"]
+        Screens["Screens (Home, Focus, History, Subjects, Reminders, Progress)"]
+        Components["Clay UI Elements (NavBar, Buttons, Cards, Dial)"]
+    end
+
+    subgraph ViewModel ["State & Event Flow"]
+        VM["ViewModels (Home, FocusTimer, History, Reminders, Stats)"]
+        State["StateFlow (Immutable UI State)"]
+        Events["Channel (One-Shot Navigation & Snackbars)"]
+    end
+
+    subgraph Service ["Background Services"]
+        TimerService["FocusTimerService (Foreground Service)"]
+        AlarmHelper["NotificationHelper & AlarmManager"]
+    end
+
+    subgraph Data ["Data & Persistence Layer"]
+        Repo["OfflineEduTrackRepository"]
+        Prefs["UserPreferencesManager (DataStore)"]
+        RoomDB[("Room SQLite Database<br/>Subjects · Sessions · Reminders · Notifications")]
+    end
+
+    UI <--> ViewModel
+    ViewModel <--> Data
+    ViewModel <--> Service
+    Service <--> Data
 ```
 
-| Layer | Technology |
+| Layer | Technologies & Libraries |
 | :--- | :--- |
 | **Language** | Kotlin `2.1.0` |
-| **UI Toolkit** | Jetpack Compose + Material 3 + Custom `Canvas` Charts |
-| **Navigation** | Navigation Compose (`NavController` & `NavHost` with typed route args) |
-| **Architecture** | MVVM (`ViewModel`, `StateFlow`, `Channel`, `AppViewModelFactory`) |
-| **Persistence** | Room `2.6.1` (KSP) — `SubjectEntity` & `StudySessionEntity` (`CASCADE` Foreign Key) |
-| **Async** | Kotlin Coroutines & Flow |
-| **Testing** | JUnit 4 unit tests (`DateTimeUtilsTest`, `ValidationUtilsTest`, `EduTrackRepositoryTest`) |
-| **CI/CD** | GitHub Actions auto-test, APK build & Rolling Release publishing |
+| **UI Toolkit** | Jetpack Compose + Material 3 + Custom Canvas Graphics |
+| **State Management** | Android ViewModel, Kotlin Coroutines, `StateFlow`, `Channel` |
+| **Persistence** | Room `2.6.1` with KSP (`SubjectEntity`, `StudySessionEntity`, `ReminderEntity`, `NotificationEntity`) |
+| **Background Work** | Foreground Service with WakeLocks, Android `AlarmManager` with Exact Scheduling |
+| **Preferences** | AndroidX DataStore Preferences |
+| **Navigation** | Navigation Compose with horizontal slide transitions & vertical sheet overlays |
+| **Build Optimization** | R8 Full-Mode, Resource Shrinking, Proguard Optimization (**1.6 MB Release APK**) |
+| **Testing** | JUnit 4 unit tests (`EduTrackRepositoryTest`, `DateTimeUtilsTest`, `ValidationUtilsTest`, `HomeMessageEngineTest`) |
+| **CI/CD** | GitHub Actions Automated Test & Rolling Release Publisher |
 
 ---
 
-## 🎨 Design System
+## 🎨 Design Tokens & Palette
 
-Crafted directly from Figma using custom SVG vector drawables (`res/drawable/ic_figma_*.xml`) and a cohesive academic color palette:
+Strictly mapped from Figma design components:
 
-| Token | Hex | Usage |
-| :--- | :--- | :--- |
-| `ForestGreenPrimary` | `#194D3E` | Focus hero card, weekly chart card, primary CTAs, progress bars |
-| `LimeAccent` | `#D8F478` | Streak pills, active bottom nav pill indicator, highlighted chart bar |
-| `LinenBackground` | `#F6F7F2` | Soft off-white light theme scaffold canvas |
-| `ForestGreenDark` | `#183D33` | High-contrast primary typography & active icons |
-| `Pastel Subject Swatches` | `#E9E2F7`, `#D8F478`, `#F7E8D5`, `#F0DDEA`, `#DCEBF2` | Subject card badges & detail hero headers |
+| Token Name | Light Value | Dark Value | Purpose |
+| :--- | :--- | :--- | :--- |
+| `ForestGreenPrimary` | `#194D3E` | `#194D3E` | Hero cards, primary action buttons, active timer progress |
+| `LimeAccent` | `#D8F478` | `#D8F478` | Highlight badges, active tab indicator, streak pills |
+| `ForestGreenDark` | `#183D33` | `#183D33` | High-contrast headers and primary labels |
+| `LinenBackground` | `#F6F7F2` | `#121614` | Edge-to-edge scaffold canvas |
+| `ClaySurface` | `#FFFFFF` | `#1E2522` | Tactile card surfaces |
+| `ClayShadow` | `rgba(0,0,0,0.06)` | `rgba(0,0,0,0.30)` | Clay bottom elevation |
 
 ---
 
 ## ⚙️ Automated CI/CD (GitHub Actions)
 
-Every push to `main` or `master` runs [`.github/workflows/android-apk.yml`](.github/workflows/android-apk.yml):
-1. Runs all unit tests (`./gradlew testDebugUnitTest`).
-2. Builds an installable Debug APK (`./gradlew assembleDebug`).
-3. Uploads the versioned APK build as a **GitHub Actions Artifact** (retained 30 days).
-4. Automatically updates the **`latest-apk`** GitHub Release with `EduTrack-debug.apk` for direct 1-click download onto any Android device.
+Every push to `main` triggers [`.github/workflows/android-apk.yml`](.github/workflows/android-apk.yml):
+1. **Unit Tests:** Executes `./gradlew testDebugUnitTest` across all test suites.
+2. **Release Compilation:** Builds `./gradlew assembleRelease` using R8 full-mode optimization.
+3. **Artifact Archiving:** Uploads versioned APKs as 30-day workflow artifacts.
+4. **Instant Release Deployment:** Deploys `EduTrack-debug.apk` directly to the [GitHub Releases](https://github.com/Zaman-Rahim/EduTrack/releases) page for one-click installation on mobile devices.
 
 ---
 
-## 🛠️ Local Development Setup
+## 🛠️ Building & Running Locally
 
-### Prerequisites
-- **Android Studio** (Ladybug or newer) with **JDK 17**
-- **Android SDK** (`compileSdk 35`, `minSdk 26`)
+### Requirements
+- **Android Studio** Ladybug (2024.2.1+) or newer
+- **JDK 17** (Temurin or OpenJDK)
+- Android SDK with `minSdk 26`, `compileSdk 35`
 
-### Run Locally
+### Clone & Build
 ```bash
+# Clone the repository
 git clone https://github.com/Zaman-Rahim/EduTrack.git
 cd EduTrack
-./gradlew testDebugUnitTest assembleDebug
+
+# Run unit test suite
+./gradlew testDebugUnitTest
+
+# Assemble production-optimized release APK (1.6 MB)
+./gradlew assembleRelease
+
+# The APK will be available at:
+# app/build/outputs/apk/release/app-release.apk
 ```
 
-### Push New Features (Triggers Auto-APK Build)
-```bash
-git add .
-git commit -m "Describe your new feature"
-git push
-```
-Wait ~2–3 minutes for GitHub Actions to finish, then download the updated **`EduTrack-debug.apk`** from the [Releases](https://github.com/Zaman-Rahim/EduTrack/releases) page on your phone!
+---
+
+## 📄 License
+This project is licensed under the [MIT License](LICENSE).

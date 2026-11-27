@@ -26,7 +26,11 @@ private val LightColors = lightColorScheme(
     onSurface = ForestGreenDark,
     surfaceVariant = LinenBackground,
     onSurfaceVariant = MutedText,
-    outline = TrackBorder
+    outline = TrackBorder,
+    error = DeleteRedText,
+    onError = SurfaceWhite,
+    errorContainer = DeleteRedBg,
+    onErrorContainer = DeleteRedText
 )
 
 private val DarkColors = darkColorScheme(
@@ -48,7 +52,11 @@ private val DarkColors = darkColorScheme(
     onSurface = SurfaceWhite,
     surfaceVariant = DarkSurfaceVariantFigma,
     onSurfaceVariant = Color(0xFFA5B8B1),
-    outline = DarkBorderFigma
+    outline = DarkBorderFigma,
+    error = DeleteRedTextDark,
+    onError = DeleteRedBgDark,
+    errorContainer = DeleteRedBgDark,
+    onErrorContainer = DeleteRedTextDark
 )
 
 @Composable

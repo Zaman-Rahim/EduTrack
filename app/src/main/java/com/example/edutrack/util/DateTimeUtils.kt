@@ -7,6 +7,7 @@ import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.time.temporal.TemporalAdjusters
 import java.util.Locale
+import kotlin.math.roundToInt
 
 /**
  * Date, duration, week boundary, and study streak utilities using [LocalDate] epoch days.
@@ -20,12 +21,39 @@ object DateTimeUtils {
     fun todayEpochDay(today: LocalDate = LocalDate.now()): Long = today.toEpochDay()
 
     /**
-     * Returns the inclusive [startEpochDay, endEpochDay] for the current Monday–Sunday week.
+     * Resolves the user preference string ("Sunday" or "Monday") to a [DayOfWeek].
      */
-    fun currentWeekBounds(today: LocalDate = LocalDate.now()): Pair<Long, Long> {
-        val monday = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
-        val sunday = monday.plusDays(6)
-        return monday.toEpochDay() to sunday.toEpochDay()
+    fun firstDayOfWeek(weekStartsOn: String): DayOfWeek =
+        if (weekStartsOn.equals("Sunday", ignoreCase = true)) DayOfWeek.SUNDAY else DayOfWeek.MONDAY
+
+    /**
+     * Returns the inclusive [startEpochDay, endEpochDay] for the current week
+     * starting on [weekStartsOn] ("Monday" or "Sunday").
+     */
+    fun currentWeekBounds(
+        weekStartsOn: String = "Monday",
+        today: LocalDate = LocalDate.now()
+    ): Pair<Long, Long> = weekBoundsForOffset(
+        weekOffset = 0,
+        weekStartsOn = weekStartsOn,
+        today = today
+    )
+
+    /**
+     * Returns the inclusive [startEpochDay, endEpochDay] for the week offset by
+     * [weekOffset] weeks relative to [today], starting on [weekStartsOn].
+     */
+    fun weekBoundsForOffset(
+        weekOffset: Int = 0,
+        weekStartsOn: String = "Monday",
+        today: LocalDate = LocalDate.now()
+    ): Pair<Long, Long> {
+        val startDay = firstDayOfWeek(weekStartsOn)
+        val weekStart = today
+            .with(TemporalAdjusters.previousOrSame(startDay))
+            .plusWeeks(weekOffset.toLong())
+        val weekEnd = weekStart.plusDays(6)
+        return weekStart.toEpochDay() to weekEnd.toEpochDay()
     }
 
     /**
@@ -73,11 +101,30 @@ object DateTimeUtils {
     }
 
     /**
-     * Formats minutes as decimal hours with one decimal place (e.g., 90 -> "1.5 hrs").
+     * Formats decimal hours as rounded hours and minutes (e.g., 1.5 -> "1h 30m").
      */
-    fun formatMinutesAsHours(totalMinutes: Int): String {
-        val hours = totalMinutes / 60.0
-        return String.format(Locale.getDefault(), "%.1f hrs", hours)
+    fun formatHoursAsHoursMinutes(hours: Double): String {
+        if (!hours.isFinite()) return "0m"
+        return formatDuration((hours * 60.0).roundToInt().coerceAtLeast(0))
+    }
+
+    /**
+     * Formats countdown seconds into (displayTime, unitLabel):
+     * ("MM:SS", "MINUTES : SECONDS") under 1 hour, and
+     * ("H:MM:SS", "HOURS : MINUTES : SECONDS") at 1 hour or more.
+     */
+    fun formatTimerCountdown(totalSeconds: Int): Pair<String, String> {
+        val safeSeconds = totalSeconds.coerceAtLeast(0)
+        return if (safeSeconds < 3600) {
+            val mins = safeSeconds / 60
+            val secs = safeSeconds % 60
+            String.format(Locale.getDefault(), "%02d:%02d", mins, secs) to "MINUTES : SECONDS"
+        } else {
+            val hours = safeSeconds / 3600
+            val mins = (safeSeconds % 3600) / 60
+            val secs = safeSeconds % 60
+            String.format(Locale.getDefault(), "%d:%02d:%02d", hours, mins, secs) to "HOURS : MINUTES : SECONDS"
+        }
     }
 
     /**

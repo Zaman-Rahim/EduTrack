@@ -11,16 +11,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.SearchOff
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -41,18 +38,17 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.edutrack.R
+import com.example.edutrack.ui.components.ClayButton
 import com.example.edutrack.ui.components.ConfirmDeleteDialog
 import com.example.edutrack.ui.components.EmptyStateCard
 import com.example.edutrack.ui.components.FigmaBackButton
 import com.example.edutrack.ui.components.figmaSubjectIconRes
-import com.example.edutrack.ui.theme.DeleteRedBg
-import com.example.edutrack.ui.theme.DeleteRedText
 import com.example.edutrack.ui.theme.ForestGreenDark
 import com.example.edutrack.ui.theme.ForestGreenPrimary
-import com.example.edutrack.ui.theme.TrackBorder
 import com.example.edutrack.ui.theme.subjectPastelContainer
 import com.example.edutrack.ui.viewmodel.SessionDetailUiState
 import com.example.edutrack.util.DateTimeUtils
+import kotlin.math.roundToInt
 
 @Composable
 fun SessionDetailScreen(
@@ -65,16 +61,48 @@ fun SessionDetailScreen(
     var showDeleteDialog by remember { mutableStateOf(false) }
 
     val detail = uiState.sessionWithSubject
+    if (uiState.isLoading && detail == null) {
+        Column(
+            modifier = modifier
+                .fillMaxSize()
+                .padding(horizontal = 24.dp, vertical = 16.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                FigmaBackButton(onClick = onBackClick)
+                Text(
+                    text = "Session details",
+                    style = MaterialTheme.typography.titleLarge.copy(fontSize = 19.sp),
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+            }
+        }
+        return
+    }
+
     if (!uiState.isLoading && detail == null) {
         Column(
             modifier = modifier
                 .fillMaxSize()
-                .padding(24.dp)
+                .padding(horizontal = 24.dp, vertical = 16.dp)
         ) {
             FigmaBackButton(onClick = onBackClick)
             Spacer(modifier = Modifier.height(16.dp))
             EmptyStateCard(
-                icon = Icons.Outlined.SearchOff,
+                iconRes = R.drawable.ic_figma_info,
                 title = "Session not found",
                 description = "This study session may have been deleted.",
                 actionLabel = "Go Back",
@@ -87,6 +115,7 @@ fun SessionDetailScreen(
     if (detail == null) return
 
     val heroBg = subjectPastelContainer(detail.subject.colorHex)
+    val weeklyMinutes = (detail.subject.weeklyGoalHours * 60.0).roundToInt()
 
     Column(
         modifier = modifier
@@ -95,7 +124,7 @@ fun SessionDetailScreen(
             .padding(horizontal = 24.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
-        // Exact Figma Header with white circular back button
+        // Exact Figma Header with circular back button
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp)
@@ -105,7 +134,9 @@ fun SessionDetailScreen(
                 text = "Session details",
                 style = MaterialTheme.typography.titleLarge.copy(fontSize = 19.sp),
                 fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onBackground
+                color = MaterialTheme.colorScheme.onBackground,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
 
@@ -162,7 +193,9 @@ fun SessionDetailScreen(
                                 text = "Logged",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.SemiBold,
-                                color = ForestGreenPrimary
+                                color = ForestGreenPrimary,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                     }
@@ -174,7 +207,9 @@ fun SessionDetailScreen(
                     text = detail.subject.name,
                     style = MaterialTheme.typography.headlineMedium.copy(fontSize = 26.sp),
                     fontWeight = FontWeight.SemiBold,
-                    color = ForestGreenDark
+                    color = ForestGreenDark,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
                 )
 
                 if (detail.session.notes.isNotBlank()) {
@@ -182,7 +217,7 @@ fun SessionDetailScreen(
                     Text(
                         text = detail.session.notes,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = Color(0xFF6C776F),
+                        color = ForestGreenDark.copy(alpha = 0.72f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -196,7 +231,9 @@ fun SessionDetailScreen(
                         fontSize = 36.sp,
                         fontWeight = FontWeight.SemiBold
                     ),
-                    color = ForestGreenDark
+                    color = ForestGreenDark,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
@@ -235,13 +272,15 @@ fun SessionDetailScreen(
                         text = DateTimeUtils.formatFullDate(detail.session.sessionDateEpochDay),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
                 HorizontalDivider(
                     modifier = Modifier.padding(vertical = 16.dp),
-                    color = TrackBorder
+                    color = MaterialTheme.colorScheme.outline
                 )
 
                 Row(
@@ -255,10 +294,12 @@ fun SessionDetailScreen(
                         modifier = Modifier.size(22.dp)
                     )
                     Text(
-                        text = "${detail.session.durationMinutes} minutes • Goal: ${detail.subject.weeklyGoalHours} hrs/week",
+                        text = "${DateTimeUtils.formatDuration(detail.session.durationMinutes)} • Goal: ${DateTimeUtils.formatDuration(weeklyMinutes)}/week",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
@@ -294,45 +335,42 @@ fun SessionDetailScreen(
 
         Spacer(modifier = Modifier.height(6.dp))
 
-        // Exact Figma bottom bar: ForestGreen "Edit session" + #F9E7E2 "Delete"
+        // Bottom bar: Clay "Edit session" + themed Delete pill
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Button(
+            ClayButton(
                 onClick = { onEditClick(detail.session.id) },
                 shape = RoundedCornerShape(18.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = ForestGreenPrimary,
-                    contentColor = Color.White
-                ),
-                modifier = Modifier
-                    .weight(1f)
-                    .height(56.dp)
+                height = 56.dp,
+                modifier = Modifier.weight(1f)
             ) {
                 Text(
                     text = "Edit session",
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
 
-            Button(
+            ClayButton(
                 onClick = { showDeleteDialog = true },
+                containerColor = MaterialTheme.colorScheme.errorContainer,
+                contentColor = MaterialTheme.colorScheme.onErrorContainer,
                 shape = RoundedCornerShape(18.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = DeleteRedBg,
-                    contentColor = DeleteRedText
-                ),
-                modifier = Modifier
-                    .width(92.dp)
-                    .height(56.dp)
+                height = 56.dp,
+                modifier = Modifier.widthIn(min = 104.dp)
             ) {
                 Text(
                     text = "Delete",
                     style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    softWrap = false
                 )
             }
         }

@@ -1,8 +1,12 @@
 package com.example.edutrack.ui.screens.home
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,15 +21,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.MenuBook
-import androidx.compose.material.icons.outlined.AutoGraph
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -45,22 +44,29 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.edutrack.R
+import com.example.edutrack.ui.components.ClayButton
 import com.example.edutrack.ui.components.EmptyStateCard
 import com.example.edutrack.ui.components.SessionListCard
 import com.example.edutrack.ui.components.TopRightHeaderButtons
 import com.example.edutrack.ui.components.bounceClick
 import com.example.edutrack.ui.components.figmaSubjectIconRes
-import com.example.edutrack.ui.theme.CardLightGreen
 import com.example.edutrack.ui.theme.ForestGreenDark
 import com.example.edutrack.ui.theme.ForestGreenPrimary
 import com.example.edutrack.ui.theme.LimeAccent
-import com.example.edutrack.ui.theme.TrackBorder
 import com.example.edutrack.ui.theme.subjectPastelContainer
 import com.example.edutrack.ui.viewmodel.HomeUiState
 import com.example.edutrack.ui.viewmodel.SubjectDashboardSummary
 import com.example.edutrack.util.DateTimeUtils
+import com.example.edutrack.util.HomeDynamicMessage
+import com.example.edutrack.util.HomeMessageAction
+import com.example.edutrack.util.HomeMessageCategory
 import java.util.Locale
-import kotlin.math.roundToInt
+
+private enum class HomeViewMode {
+    LOADING,
+    WELCOME,
+    DASHBOARD
+}
 
 @Composable
 fun HomeScreen(
@@ -75,135 +81,180 @@ fun HomeScreen(
     onSessionClick: (Long) -> Unit,
     onManageSubjectsClick: () -> Unit,
     onViewAllHistoryClick: () -> Unit,
+    onDynamicActionClick: (HomeMessageAction) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val isBrandNewUser = !uiState.isLoading &&
         uiState.subjectSummaries.isEmpty() &&
         uiState.recentSessions.isEmpty()
 
-    LazyColumn(
+    val viewMode = when {
+        uiState.isLoading -> HomeViewMode.LOADING
+        isBrandNewUser -> HomeViewMode.WELCOME
+        else -> HomeViewMode.DASHBOARD
+    }
+
+    AnimatedContent(
+        targetState = viewMode,
+        transitionSpec = {
+            fadeIn(animationSpec = tween(180)) togetherWith fadeOut(animationSpec = tween(140))
+        },
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 28.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp)
-    ) {
-        // Exact Figma Header
-        item {
-            if (isBrandNewUser) {
-                WelcomeHeaderSection(
-                    unreadNotificationsCount = unreadNotificationsCount,
-                    onNotificationsClick = onNotificationsClick,
-                    onMeClick = onMeClick
-                )
-            } else {
-                HomeHeaderSection(
-                    unreadNotificationsCount = unreadNotificationsCount,
-                    onNotificationsClick = onNotificationsClick,
-                    onMeClick = onMeClick
-                )
-            }
-        }
-
-        if (isBrandNewUser) {
-            item {
-                FirstStudyPlanCard(
-                    onAddSubjectClick = onAddFirstSubjectClick
-                )
-            }
-            return@LazyColumn
-        }
-
-        // Exact Figma Hero Focus Card
-        item {
-            TodayFocusCard(uiState = uiState)
-        }
-
-        // Exact Figma Weekly Goal Section
-        item {
-            WeeklyGoalSection(uiState = uiState)
-        }
-
-        // Your Subjects Section Header
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Your subjects",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-                Text(
-                    text = "View all",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.clickable(onClick = onManageSubjectsClick)
-                )
-            }
-        }
-
-        if (!uiState.isLoading && uiState.subjectSummaries.isEmpty()) {
-            item {
-                EmptyStateCard(
-                    icon = Icons.AutoMirrored.Outlined.MenuBook,
-                    title = "No subjects added yet",
-                    description = "Create your first subject in Subjects to start tracking weekly study goals.",
-                    actionLabel = "Add Subject",
-                    onActionClick = onManageSubjectsClick
-                )
-            }
-        } else {
-            items(uiState.subjectSummaries, key = { "subject_${it.subject.id}" }) { summary ->
-                FigmaSubjectCard(
-                    summary = summary,
-                    onClick = { onSubjectClick(summary.subject.id) },
-                    onQuickAddClick = { onQuickAddForSubject(summary.subject.id) }
-                )
-            }
-        }
-
-        // Recent Study Sessions Section Header
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Recent sessions",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-                TextButton(onClick = onViewAllHistoryClick) {
-                    Text(
-                        text = "History",
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.SemiBold
-                    )
+        label = "home_loading_transition"
+    ) { mode ->
+        when (mode) {
+            HomeViewMode.LOADING -> {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                 }
             }
-        }
 
-        if (!uiState.isLoading && uiState.recentSessions.isEmpty()) {
-            item {
-                EmptyStateCard(
-                    icon = Icons.Outlined.AutoGraph,
-                    title = "No study sessions logged",
-                    description = "Tap 'Log a study session' above to record your first study session.",
-                    actionLabel = "Log Session",
-                    onActionClick = onAddSessionClick
-                )
+            HomeViewMode.WELCOME -> {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 28.dp),
+                    verticalArrangement = Arrangement.spacedBy(18.dp)
+                ) {
+                    item(key = "welcome_header", contentType = "header") {
+                        WelcomeHeaderSection(
+                            unreadNotificationsCount = unreadNotificationsCount,
+                            onNotificationsClick = onNotificationsClick,
+                            onMeClick = onMeClick
+                        )
+                    }
+                    item(key = "first_study_plan", contentType = "welcome_card") {
+                        FirstStudyPlanCard(
+                            onAddSubjectClick = onAddFirstSubjectClick
+                        )
+                    }
+                }
             }
-        } else {
-            items(uiState.recentSessions, key = { "session_${it.session.id}" }) { sessionItem ->
-                SessionListCard(
-                    item = sessionItem,
-                    onClick = { onSessionClick(sessionItem.session.id) }
-                )
+
+            HomeViewMode.DASHBOARD -> {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 28.dp),
+                    verticalArrangement = Arrangement.spacedBy(18.dp)
+                ) {
+                    // Exact Figma Header
+                    item(key = "home_header", contentType = "header") {
+                        HomeHeaderSection(
+                            dynamicMessage = uiState.dynamicMessage,
+                            unreadNotificationsCount = unreadNotificationsCount,
+                            onNotificationsClick = onNotificationsClick,
+                            onMeClick = onMeClick,
+                            onDynamicActionClick = onDynamicActionClick
+                        )
+                    }
+
+                    // Exact Figma Hero Focus Card
+                    item(key = "today_focus_card", contentType = "hero_card") {
+                        TodayFocusCard(uiState = uiState)
+                    }
+
+                    // Exact Figma Weekly Goal Section
+                    item(key = "weekly_goal_section", contentType = "weekly_goal") {
+                        WeeklyGoalSection(uiState = uiState)
+                    }
+
+                    // Your Subjects Section Header
+                    item(key = "subjects_header", contentType = "section_header") {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Your subjects",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onBackground
+                            )
+                            Text(
+                                text = "View all",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .bounceClick(onClick = onManageSubjectsClick)
+                                    .padding(horizontal = 6.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+
+                    if (uiState.subjectSummaries.isEmpty()) {
+                        item(key = "subjects_empty", contentType = "empty_state") {
+                            EmptyStateCard(
+                                iconRes = R.drawable.ic_figma_book,
+                                title = "No subjects added yet",
+                                description = "Create your first subject in Subjects to start tracking weekly study goals.",
+                                actionLabel = "Add Subject",
+                                onActionClick = onManageSubjectsClick
+                            )
+                        }
+                    } else {
+                        items(
+                            items = uiState.subjectSummaries,
+                            key = { "subject_${it.subject.id}" },
+                            contentType = { "subject_card" }
+                        ) { summary ->
+                            FigmaSubjectCard(
+                                summary = summary,
+                                onClick = { onSubjectClick(summary.subject.id) }
+                            )
+                        }
+                    }
+
+                    // Recent Study Sessions Section Header
+                    item(key = "recent_sessions_header", contentType = "section_header") {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Recent sessions",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onBackground
+                            )
+                            TextButton(onClick = onViewAllHistoryClick) {
+                                Text(
+                                    text = "History",
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+                    }
+
+                    if (uiState.recentSessions.isEmpty()) {
+                        item(key = "sessions_empty", contentType = "empty_state") {
+                            EmptyStateCard(
+                                iconRes = R.drawable.ic_figma_stats,
+                                title = "No study sessions logged",
+                                description = "Open Subjects and start a focus timer to track your study sessions.",
+                                actionLabel = "Open Subjects",
+                                onActionClick = onManageSubjectsClick
+                            )
+                        }
+                    } else {
+                        items(
+                            items = uiState.recentSessions,
+                            key = { "session_${it.session.id}" },
+                            contentType = { "session_card" }
+                        ) { sessionItem ->
+                            SessionListCard(
+                                item = sessionItem,
+                                onClick = { onSessionClick(sessionItem.session.id) }
+                            )
+                        }
+                    }
+                }
             }
         }
     }
@@ -211,10 +262,18 @@ fun HomeScreen(
 
 @Composable
 private fun HomeHeaderSection(
+    dynamicMessage: HomeDynamicMessage?,
     unreadNotificationsCount: Int,
     onNotificationsClick: () -> Unit,
-    onMeClick: () -> Unit
+    onMeClick: () -> Unit,
+    onDynamicActionClick: (HomeMessageAction) -> Unit
 ) {
+    val activeMessage = dynamicMessage ?: HomeDynamicMessage(
+        headline = "Your effort. Your momentum.",
+        supportingLine = "Pick a subject and start when you're ready.",
+        category = HomeMessageCategory.MORNING_FRESH
+    )
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -226,19 +285,68 @@ private fun HomeHeaderSection(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontWeight = FontWeight.SemiBold,
-                letterSpacing = 0.8.sp
+                letterSpacing = 0.8.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Your effort.\nYour momentum.",
-                style = MaterialTheme.typography.headlineMedium.copy(
-                    fontSize = 30.sp,
-                    lineHeight = 38.sp
-                ),
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onBackground
-            )
+            Spacer(modifier = Modifier.height(6.dp))
+            AnimatedContent(
+                targetState = activeMessage,
+                transitionSpec = {
+                    fadeIn(animationSpec = tween(220)) togetherWith fadeOut(animationSpec = tween(180))
+                },
+                label = "home_dynamic_message"
+            ) { msg ->
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = msg.headline,
+                        style = MaterialTheme.typography.headlineMedium.copy(
+                            fontSize = 25.sp,
+                            lineHeight = 31.sp
+                        ),
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = msg.supportingLine,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (msg.actionLabel != null && msg.action != null) {
+                        Spacer(modifier = Modifier.height(2.dp))
+                        val isPending = msg.category == HomeMessageCategory.PENDING_REMINDERS
+                        Surface(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(999.dp))
+                                .bounceClick { onDynamicActionClick(msg.action) },
+                            shape = RoundedCornerShape(999.dp),
+                            color = if (isPending) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.primaryContainer
+                            }
+                        ) {
+                            Text(
+                                text = "${msg.actionLabel} →",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (isPending) {
+                                    MaterialTheme.colorScheme.onPrimary
+                                } else {
+                                    MaterialTheme.colorScheme.onPrimaryContainer
+                                },
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                            )
+                        }
+                    }
+                }
+            }
         }
+        Spacer(modifier = Modifier.width(8.dp))
         TopRightHeaderButtons(
             unreadNotificationsCount = unreadNotificationsCount,
             onNotificationsClick = onNotificationsClick,
@@ -341,7 +449,7 @@ private fun FirstStudyPlanCard(
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(20.dp),
-            color = CardLightGreen
+            color = MaterialTheme.colorScheme.primaryContainer
         ) {
             Column(
                 modifier = Modifier
@@ -353,28 +461,22 @@ private fun FirstStudyPlanCard(
                     text = "01   Add a subject and a daily time goal",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
-                    color = ForestGreenDark
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
                 Text(
                     text = "02   Choose repeat days, or study just once",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
-                    color = ForestGreenDark
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
             }
         }
 
-        Button(
+        ClayButton(
             onClick = onAddSubjectClick,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp)
-                .bounceClick(onClick = onAddSubjectClick),
             shape = RoundedCornerShape(18.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = ForestGreenPrimary,
-                contentColor = Color.White
-            )
+            height = 56.dp,
+            modifier = Modifier.fillMaxWidth()
         ) {
             Text(
                 text = "Add your first subject",
@@ -387,6 +489,7 @@ private fun FirstStudyPlanCard(
 
 @Composable
 private fun TodayFocusCard(uiState: HomeUiState) {
+    val sessionWord = if (uiState.todaySessionCount == 1) "session" else "sessions"
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(26.dp),
@@ -453,7 +556,7 @@ private fun TodayFocusCard(uiState: HomeUiState) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "${uiState.todaySessionCount} sessions completed",
+                    text = "${uiState.todaySessionCount} $sessionWord completed",
                     style = MaterialTheme.typography.bodySmall,
                     fontWeight = FontWeight.Medium,
                     color = Color.White
@@ -471,8 +574,8 @@ private fun TodayFocusCard(uiState: HomeUiState) {
 
 @Composable
 private fun WeeklyGoalSection(uiState: HomeUiState) {
-    val loggedHours = uiState.weekMinutes / 60.0
-    val targetHours = uiState.totalWeeklyGoalHours
+    val loggedFormatted = DateTimeUtils.formatDuration(uiState.weekMinutes)
+    val targetFormatted = DateTimeUtils.formatHoursAsHoursMinutes(uiState.totalWeeklyGoalHours)
     val percentage = uiState.weeklyPercentage
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -488,7 +591,7 @@ private fun WeeklyGoalSection(uiState: HomeUiState) {
                 color = MaterialTheme.colorScheme.onBackground
             )
             Text(
-                text = String.format(Locale.getDefault(), "%.1f / %.1f hrs", loggedHours, targetHours),
+                text = "$loggedFormatted / $targetFormatted",
                 style = MaterialTheme.typography.bodySmall,
                 fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -506,8 +609,8 @@ private fun WeeklyGoalSection(uiState: HomeUiState) {
                 .fillMaxWidth()
                 .height(8.dp)
                 .clip(RoundedCornerShape(4.dp)),
-            color = ForestGreenPrimary,
-            trackColor = TrackBorder,
+            color = MaterialTheme.colorScheme.primary,
+            trackColor = MaterialTheme.colorScheme.outline,
             strokeCap = StrokeCap.Round
         )
 
@@ -522,14 +625,13 @@ private fun WeeklyGoalSection(uiState: HomeUiState) {
 @Composable
 private fun FigmaSubjectCard(
     summary: SubjectDashboardSummary,
-    onClick: () -> Unit,
-    onQuickAddClick: () -> Unit
+    onClick: () -> Unit
 ) {
     val containerBg = subjectPastelContainer(summary.subject.colorHex)
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
+            .bounceClick(scaleDown = 0.98f, onClick = onClick),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
@@ -571,7 +673,7 @@ private fun FigmaSubjectCard(
                 )
                 Spacer(modifier = Modifier.height(3.dp))
                 val notesText = if (summary.latestSessionNotes.isNullOrBlank()) {
-                    "${formatHoursAsHoursMinutes(summary.subject.weeklyGoalHours)} weekly goal"
+                    "${DateTimeUtils.formatHoursAsHoursMinutes(summary.subject.weeklyGoalHours)} weekly goal"
                 } else {
                     summary.latestSessionNotes
                 }
@@ -586,27 +688,20 @@ private fun FigmaSubjectCard(
 
             Spacer(modifier = Modifier.width(10.dp))
 
-            Text(
-                text = formatHoursAsHoursMinutes(summary.hoursThisWeek),
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .clickable(onClick = onQuickAddClick)
-                    .padding(horizontal = 6.dp, vertical = 4.dp)
-            )
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.primaryContainer
+            ) {
+                Text(
+                    text = DateTimeUtils.formatDuration(summary.minutesThisWeek),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    maxLines = 1,
+                    softWrap = false,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                )
+            }
         }
-    }
-}
-
-private fun formatHoursAsHoursMinutes(hours: Double): String {
-    val totalMinutes = (hours * 60).roundToInt().coerceAtLeast(0)
-    return if (totalMinutes < 60) {
-        "${totalMinutes}m"
-    } else {
-        val h = totalMinutes / 60
-        val m = totalMinutes % 60
-        if (m == 0) "${h}h" else "${h}h ${m}m"
     }
 }

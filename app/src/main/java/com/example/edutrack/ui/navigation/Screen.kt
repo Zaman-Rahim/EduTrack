@@ -4,21 +4,10 @@ package com.example.edutrack.ui.navigation
  * Navigation route contracts for all screens in EduTrack.
  */
 sealed class Screen(val route: String) {
-    data object Home : Screen("home")
-    data object History : Screen("history?subjectId={subjectId}") {
-        const val ARG_SUBJECT_ID = "subjectId"
-        fun createRoute(subjectId: Long = -1L): String = "history?subjectId=$subjectId"
-    }
-    data object Subjects : Screen("subjects")
-    data object Reminders : Screen("reminders")
-    data object Stats : Screen("stats")
-
     data object AddEditSubject : Screen("add_edit_subject?subjectId={subjectId}") {
         const val ARG_SUBJECT_ID = "subjectId"
         fun createRoute(subjectId: Long = -1L): String = "add_edit_subject?subjectId=$subjectId"
     }
-
-    data object FocusTimer : Screen("focus_timer")
 
     data object AddEditReminder : Screen("add_edit_reminder?reminderId={reminderId}") {
         const val ARG_REMINDER_ID = "reminderId"

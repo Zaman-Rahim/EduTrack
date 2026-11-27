@@ -1,5 +1,6 @@
 package com.example.edutrack.ui.screens.subjects
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.BorderStroke
@@ -10,11 +11,13 @@ import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -23,19 +26,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -49,20 +46,20 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.edutrack.R
 import com.example.edutrack.data.local.entity.SubjectEntity
 import com.example.edutrack.data.local.entity.SubjectRepeatMode
+import com.example.edutrack.ui.components.ClayButton
 import com.example.edutrack.ui.components.ClaySegmentedControl
 import com.example.edutrack.ui.components.ConfirmDeleteDialog
+import com.example.edutrack.ui.components.EmptyStateCard
 import com.example.edutrack.ui.components.FigmaBackButton
 import com.example.edutrack.ui.components.FigmaCustomDateTimeScreen
 import com.example.edutrack.ui.components.bounceClick
-import com.example.edutrack.ui.theme.DeleteRedBg
-import com.example.edutrack.ui.theme.DeleteRedText
 import com.example.edutrack.ui.theme.ForestGreenDark
-import com.example.edutrack.ui.theme.ForestGreenPrimary
 import com.example.edutrack.ui.theme.LimeAccent
 import com.example.edutrack.ui.theme.SubjectTagPalette
 import com.example.edutrack.ui.viewmodel.SubjectFormState
@@ -73,7 +70,6 @@ import com.example.edutrack.util.DateTimeUtils
  * daily goal hours/minutes, start date, repeat mode (Once / Every day / Custom days),
  * and 7-day interactive weekday chips.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddEditSubjectScheduleScreen(
     formState: SubjectFormState,
@@ -88,13 +84,14 @@ fun AddEditSubjectScheduleScreen(
     onColorSelected: (Long) -> Unit,
     onSaveClick: () -> Unit,
     onDeleteClick: (SubjectEntity) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    weekStartsOn: String = "Monday"
 ) {
     var showDatePicker by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
 
     if (showDatePicker) {
-        androidx.activity.compose.BackHandler(enabled = true) {
+        BackHandler(enabled = true) {
             showDatePicker = false
         }
         FigmaCustomDateTimeScreen(
@@ -107,17 +104,86 @@ fun AddEditSubjectScheduleScreen(
             onConfirm = { epochDay, _ ->
                 onStartDateSelected(epochDay)
                 showDatePicker = false
-            }
+            },
+            weekStartsOn = weekStartsOn
         )
         return
     }
 
     val isEdit = formState.editingSubjectId != null
 
+    if (formState.isLoading) {
+        Column(
+            modifier = modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .padding(horizontal = 24.dp, vertical = 16.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                FigmaBackButton(onClick = onBackClick)
+                Text(
+                    text = if (isEdit) "Edit subject" else "Add a subject",
+                    style = MaterialTheme.typography.titleLarge.copy(fontSize = 19.sp),
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+            }
+        }
+        return
+    }
+
+    val notFoundError = formState.notFoundError
+    if (notFoundError != null) {
+        Column(
+            modifier = modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .padding(horizontal = 24.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                FigmaBackButton(onClick = onBackClick)
+                Text(
+                    text = "Edit subject",
+                    style = MaterialTheme.typography.titleLarge.copy(fontSize = 19.sp),
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            EmptyStateCard(
+                iconRes = R.drawable.ic_figma_info,
+                title = "Subject not found",
+                description = notFoundError,
+                actionLabel = "Go Back",
+                onActionClick = onBackClick
+            )
+        }
+        return
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFFEDF2E8))
+            .background(MaterialTheme.colorScheme.background)
+            .imePadding()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -129,6 +195,7 @@ fun AddEditSubjectScheduleScreen(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Row(
+                modifier = Modifier.weight(1f),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(14.dp)
             ) {
@@ -137,22 +204,27 @@ fun AddEditSubjectScheduleScreen(
                     text = if (isEdit) "Edit subject" else "Add a subject",
                     style = MaterialTheme.typography.titleLarge.copy(fontSize = 19.sp),
                     fontWeight = FontWeight.SemiBold,
-                    color = ForestGreenDark
+                    color = MaterialTheme.colorScheme.onBackground,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
             if (isEdit && editingSubject != null) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(DeleteRedBg)
-                        .bounceClick { showDeleteDialog = true }
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                Spacer(modifier = Modifier.width(8.dp))
+                ClayButton(
+                    onClick = { showDeleteDialog = true },
+                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                    contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                    shape = RoundedCornerShape(12.dp),
+                    height = 38.dp,
+                    contentPadding = PaddingValues(horizontal = 14.dp)
                 ) {
                     Text(
                         text = "Delete",
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.SemiBold,
-                        color = DeleteRedText
+                        maxLines = 1,
+                        softWrap = false
                     )
                 }
             }
@@ -173,10 +245,10 @@ fun AddEditSubjectScheduleScreen(
             singleLine = true,
             shape = RoundedCornerShape(16.dp),
             colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = Color(0xFFF7FAF3),
-                unfocusedContainerColor = Color(0xFFF7FAF3),
-                focusedBorderColor = ForestGreenPrimary,
-                unfocusedBorderColor = Color(0xFFCCD8C4)
+                focusedContainerColor = MaterialTheme.colorScheme.surface,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                unfocusedBorderColor = MaterialTheme.colorScheme.outline
             ),
             isError = formState.nameError != null,
             supportingText = formState.nameError?.let { err -> { Text(err) } },
@@ -193,14 +265,14 @@ fun AddEditSubjectScheduleScreen(
                 text = "Colour tag",
                 style = MaterialTheme.typography.bodySmall,
                 fontWeight = FontWeight.SemiBold,
-                color = ForestGreenDark
+                color = MaterialTheme.colorScheme.onBackground
             )
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 SubjectTagPalette.forEach { colorHex ->
                     val isSelected = formState.selectedColorHex == colorHex
                     Box(
                         modifier = Modifier
-                            .size(34.dp)
+                            .size(36.dp)
                             .clip(CircleShape)
                             .background(Color(colorHex))
                             .bounceClick { onColorSelected(colorHex) },
@@ -230,12 +302,15 @@ fun AddEditSubjectScheduleScreen(
                     text = "Daily study goal",
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = ForestGreenDark
+                    color = MaterialTheme.colorScheme.onBackground
                 )
+                Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = "On each scheduled day",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
 
@@ -248,6 +323,7 @@ fun AddEditSubjectScheduleScreen(
                     onValueChange = onDailyHoursChanged,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true,
+                    isError = formState.goalError != null,
                     textStyle = MaterialTheme.typography.headlineSmall.copy(
                         fontSize = 26.sp,
                         fontWeight = FontWeight.SemiBold
@@ -262,10 +338,10 @@ fun AddEditSubjectScheduleScreen(
                     },
                     shape = RoundedCornerShape(16.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = Color(0xFFE3EED5),
-                        unfocusedContainerColor = Color(0xFFE3EED5),
-                        focusedBorderColor = ForestGreenPrimary,
-                        unfocusedBorderColor = Color(0xFFB9CDA7)
+                        focusedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline
                     ),
                     modifier = Modifier.weight(1f)
                 )
@@ -275,6 +351,7 @@ fun AddEditSubjectScheduleScreen(
                     onValueChange = onDailyMinutesChanged,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true,
+                    isError = formState.goalError != null,
                     textStyle = MaterialTheme.typography.headlineSmall.copy(
                         fontSize = 26.sp,
                         fontWeight = FontWeight.SemiBold
@@ -289,10 +366,10 @@ fun AddEditSubjectScheduleScreen(
                     },
                     shape = RoundedCornerShape(16.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = Color(0xFFE3EED5),
-                        unfocusedContainerColor = Color(0xFFE3EED5),
-                        focusedBorderColor = ForestGreenPrimary,
-                        unfocusedBorderColor = Color(0xFFB9CDA7)
+                        focusedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline
                     ),
                     modifier = Modifier.weight(1f)
                 )
@@ -322,7 +399,7 @@ fun AddEditSubjectScheduleScreen(
                 text = "Start date",
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = ForestGreenDark
+                color = MaterialTheme.colorScheme.onBackground
             )
 
             OutlinedTextField(
@@ -342,16 +419,16 @@ fun AddEditSubjectScheduleScreen(
                     Icon(
                         painter = painterResource(id = R.drawable.ic_figma_down),
                         contentDescription = null,
-                        tint = ForestGreenDark,
+                        tint = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.size(20.dp)
                     )
                 },
                 shape = RoundedCornerShape(16.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = Color(0xFFF7FAF3),
-                    unfocusedContainerColor = Color(0xFFF7FAF3),
-                    focusedBorderColor = ForestGreenPrimary,
-                    unfocusedBorderColor = Color(0xFFCCD8C4)
+                    focusedContainerColor = MaterialTheme.colorScheme.surface,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
                 ),
                 modifier = Modifier.fillMaxWidth()
             )
@@ -363,7 +440,7 @@ fun AddEditSubjectScheduleScreen(
                 text = "Repeat",
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = ForestGreenDark
+                color = MaterialTheme.colorScheme.onBackground
             )
 
             val repeatModes = remember {
@@ -383,42 +460,70 @@ fun AddEditSubjectScheduleScreen(
                 }
             )
 
-            // 7-day interactive weekday chips
+            // 7-day interactive weekday chips (responsive weight + weekStartsOn order)
             AnimatedVisibility(visible = formState.repeatMode == SubjectRepeatMode.CUSTOM) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    val dayLabels = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+                    val orderedDays = remember(weekStartsOn) {
+                        val monToSun = listOf(
+                            0 to "Mon",
+                            1 to "Tue",
+                            2 to "Wed",
+                            3 to "Thu",
+                            4 to "Fri",
+                            5 to "Sat",
+                            6 to "Sun"
+                        )
+                        if (weekStartsOn.equals("Sunday", ignoreCase = true)) {
+                            listOf(monToSun.last()) + monToSun.dropLast(1)
+                        } else {
+                            monToSun
+                        }
+                    }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        dayLabels.forEachIndexed { idx, label ->
-                            val isOn = (formState.selectedDaysMask and (1 shl idx)) != 0
+                        orderedDays.forEach { (bitIdx, label) ->
+                            val isOn = (formState.selectedDaysMask and (1 shl bitIdx)) != 0
                             val chipBg by animateColorAsState(
-                                targetValue = if (isOn) LimeAccent else Color(0xFFF2F6EC),
-                                label = "day_chip_$idx"
+                                targetValue = if (isOn) LimeAccent else MaterialTheme.colorScheme.surface,
+                                label = "day_chip_$bitIdx"
                             )
+                            val borderColor = if (isOn) LimeAccent else MaterialTheme.colorScheme.outline
+                            val textColor = if (isOn) ForestGreenDark else MaterialTheme.colorScheme.onSurface
                             Box(
                                 modifier = Modifier
-                                    .size(width = 44.dp, height = 42.dp)
+                                    .weight(1f)
+                                    .height(44.dp)
                                     .clip(RoundedCornerShape(14.dp))
                                     .background(chipBg)
-                                    .border(1.dp, Color(0xFFC9D6BF), RoundedCornerShape(14.dp))
-                                    .bounceClick { onToggleDayBit(idx) },
+                                    .border(1.dp, borderColor, RoundedCornerShape(14.dp))
+                                    .bounceClick { onToggleDayBit(bitIdx) },
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
                                     text = label,
                                     fontSize = 11.sp,
                                     fontWeight = if (isOn) FontWeight.SemiBold else FontWeight.Normal,
-                                    color = ForestGreenDark
+                                    color = textColor,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
                         }
                     }
 
-                    val offDays = dayLabels.filterIndexed { idx, _ ->
-                        (formState.selectedDaysMask and (1 shl idx)) == 0
+                    if (formState.scheduleError != null) {
+                        Text(
+                            text = formState.scheduleError,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
                     }
+
+                    val offDays = orderedDays
+                        .filter { (bitIdx, _) -> (formState.selectedDaysMask and (1 shl bitIdx)) == 0 }
+                        .map { it.second }
                     val offSummary = when {
                         offDays.isEmpty() -> "Repeats every day of the week."
                         offDays.size == 7 -> "Select at least one day to repeat."
@@ -439,11 +544,11 @@ fun AddEditSubjectScheduleScreen(
             )
         }
 
-        // Calculated Weekly Target Banner (#DEEACF)
+        // Calculated Weekly Target Banner
         Surface(
             shape = RoundedCornerShape(16.dp),
-            color = Color(0xFFDEEACF),
-            border = BorderStroke(1.dp, Color(0xFFC2D5AE)),
+            color = MaterialTheme.colorScheme.primaryContainer,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
             modifier = Modifier.fillMaxWidth()
         ) {
             Row(
@@ -462,13 +567,19 @@ fun AddEditSubjectScheduleScreen(
                 Text(
                     text = leftText,
                     style = MaterialTheme.typography.labelLarge,
-                    color = ForestGreenDark
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
                 )
+                Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = "${DateTimeUtils.formatDuration(formState.calculatedWeeklyMinutes)} / week",
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.SemiBold,
-                    color = ForestGreenPrimary
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
+                    softWrap = false
                 )
             }
         }
@@ -476,20 +587,19 @@ fun AddEditSubjectScheduleScreen(
         Spacer(modifier = Modifier.height(6.dp))
 
         // Save Subject CTA
-        Button(
+        ClayButton(
             onClick = onSaveClick,
+            enabled = !formState.isSaving,
             shape = RoundedCornerShape(18.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = ForestGreenPrimary,
-                contentColor = Color.White
-            ),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp)
-                .bounceClick(onClick = onSaveClick)
+            height = 56.dp,
+            modifier = Modifier.fillMaxWidth()
         ) {
             Text(
-                text = if (isEdit) "Save changes" else "Save subject",
+                text = when {
+                    formState.isSaving -> "Saving..."
+                    isEdit -> "Save changes"
+                    else -> "Save subject"
+                },
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
             )

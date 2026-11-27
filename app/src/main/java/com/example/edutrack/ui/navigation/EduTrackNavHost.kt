@@ -1,6 +1,9 @@
 package com.example.edutrack.ui.navigation
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -10,28 +13,38 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -40,7 +53,9 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.edutrack.AppContainer
 import com.example.edutrack.R
-import com.example.edutrack.data.preferences.AlarmToneOption
+import com.example.edutrack.data.local.entity.SubjectEntity
+import com.example.edutrack.notifications.NotificationHelper
+import com.example.edutrack.notifications.ReminderAlarmScheduler
 import com.example.edutrack.ui.components.ClayBottomNavBar
 import com.example.edutrack.ui.components.ClayNavTab
 import com.example.edutrack.ui.components.LiveFocusBar
@@ -57,6 +72,8 @@ import com.example.edutrack.ui.screens.reminders.RemindersScreen
 import com.example.edutrack.ui.screens.stats.StatsScreen
 import com.example.edutrack.ui.screens.subjects.AddEditSubjectScheduleScreen
 import com.example.edutrack.ui.screens.subjects.SubjectManagerScreen
+import com.example.edutrack.ui.timer.FocusTimerManager
+import com.example.edutrack.ui.timer.FocusTimerUiState
 import com.example.edutrack.ui.timer.TimerStatus
 import com.example.edutrack.ui.viewmodel.AddEditSessionEvent
 import com.example.edutrack.ui.viewmodel.AddEditSessionViewModel
@@ -71,6 +88,11 @@ import com.example.edutrack.ui.viewmodel.SessionDetailViewModel
 import com.example.edutrack.ui.viewmodel.StatsViewModel
 import com.example.edutrack.ui.viewmodel.SubjectManagerEvent
 import com.example.edutrack.ui.viewmodel.SubjectManagerViewModel
+import com.example.edutrack.util.HomeMessageAction
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 private const val MAIN_TABS_ROUTE = "main_tabs"
@@ -98,12 +120,21 @@ private val bottomNavTabs = listOf(
     )
 )
 
+private fun shouldShowLiveBar(state: FocusTimerUiState, route: String): Boolean =
+    state.isActive &&
+        state.isMinimized &&
+        !state.isBarHidden &&
+        route != Screen.Me.route &&
+        !route.startsWith("add_edit_subject")
+
 @Composable
 fun EduTrackNavHost(
     container: AppContainer,
     isDarkTheme: Boolean,
     onToggleTheme: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    openTargetFlow: StateFlow<String?> = MutableStateFlow(null),
+    onOpenTargetConsumed: () -> Unit = {}
 ) {
     val repository = container.repository
     val focusTimerManager = container.focusTimerManager
@@ -121,6 +152,28 @@ fun EduTrackNavHost(
         }
     }
 
+    fun navigateSingleTop(route: String) {
+        navController.navigate(route) {
+            launchSingleTop = true
+        }
+    }
+
+    fun navigateUtilityRoute(route: String) {
+        navController.navigate(route) {
+            launchSingleTop = true
+            popUpTo(MAIN_TABS_ROUTE) {
+                inclusive = false
+            }
+        }
+    }
+
+    fun popSafely() {
+        val currentEntry = navController.currentBackStackEntry
+        if (currentEntry?.lifecycle?.currentState?.isAtLeast(Lifecycle.State.STARTED) == true) {
+            navController.popBackStack()
+        }
+    }
+
     fun navigateToMainTab(pageIndex: Int) {
         navController.popBackStack(MAIN_TABS_ROUTE, inclusive = false)
         scope.launch {
@@ -130,17 +183,21 @@ fun EduTrackNavHost(
 
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route.orEmpty()
-
     val isTopLevelScreen = currentRoute == MAIN_TABS_ROUTE
 
-    val homeViewModel: HomeViewModel = viewModel(factory = AppViewModelFactory(repository))
+    val appContext = LocalContext.current.applicationContext
+    var blockedSubjectTarget by remember { mutableStateOf<SubjectEntity?>(null) }
+
+    val homeViewModel: HomeViewModel = viewModel(
+        factory = AppViewModelFactory(repository, preferencesManager = userPreferencesManager)
+    )
     val homeUiState by homeViewModel.uiState.collectAsStateWithLifecycle()
 
     val subjectManagerViewModel: SubjectManagerViewModel = viewModel(
         factory = AppViewModelFactory(repository)
     )
     val remindersViewModel: RemindersViewModel = viewModel(
-        factory = AppViewModelFactory(repository)
+        factory = AppViewModelFactory(repository, appContext = appContext)
     )
     val notificationsViewModel: NotificationsViewModel = viewModel(
         factory = AppViewModelFactory(repository)
@@ -148,18 +205,40 @@ fun EduTrackNavHost(
 
     val notificationsState by notificationsViewModel.uiState.collectAsStateWithLifecycle()
     val prefsState by userPreferencesManager.state.collectAsStateWithLifecycle()
+    val timerStatus by remember(focusTimerManager) {
+        focusTimerManager.state.map { it.status }.distinctUntilChanged()
+    }.collectAsStateWithLifecycle(initialValue = focusTimerManager.state.value.status)
+    val isTimerExpanded by remember(focusTimerManager) {
+        focusTimerManager.state.map { it.isActive && !it.isMinimized }.distinctUntilChanged()
+    }.collectAsStateWithLifecycle(
+        initialValue = focusTimerManager.state.value.let { it.isActive && !it.isMinimized }
+    )
+
+    val openTarget by openTargetFlow.collectAsStateWithLifecycle()
+    LaunchedEffect(openTarget) {
+        when (openTarget) {
+            NotificationHelper.OPEN_TARGET_FOCUS_TIMER -> {
+                if (focusTimerManager.state.value.isActive) {
+                    focusTimerManager.expand()
+                }
+                onOpenTargetConsumed()
+            }
+            NotificationHelper.OPEN_TARGET_REMINDERS -> {
+                navigateToMainTab(3)
+                onOpenTargetConsumed()
+            }
+        }
+    }
 
     val unreadCount = notificationsState.unreadCount
+    val showLiveBarInitial = remember(currentRoute) {
+        shouldShowLiveBar(focusTimerManager.state.value, currentRoute)
+    }
     val showLiveBar by remember(focusTimerManager, currentRoute) {
         focusTimerManager.state.map { state ->
-            state.isActive &&
-                state.isMinimized &&
-                !state.isBarHidden &&
-                currentRoute != Screen.FocusTimer.route &&
-                currentRoute != Screen.Me.route &&
-                !currentRoute.startsWith("add_edit_subject")
+            shouldShowLiveBar(state, currentRoute)
         }.distinctUntilChanged()
-    }.collectAsStateWithLifecycle(initialValue = false)
+    }.collectAsStateWithLifecycle(initialValue = showLiveBarInitial)
 
     LaunchedEffect(pagerState.currentPage) {
         val state = focusTimerManager.state.value
@@ -173,134 +252,86 @@ fun EduTrackNavHost(
         }
     }
 
-    Scaffold(
-        modifier = modifier,
-        contentWindowInsets = WindowInsets.statusBars,
-        containerColor = MaterialTheme.colorScheme.background,
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
-        bottomBar = {
-            Column {
-                AnimatedVisibility(
-                    visible = showLiveBar,
-                    enter = slideInVertically(
-                        initialOffsetY = { -it / 2 },
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioLowBouncy,
-                            stiffness = Spring.StiffnessMediumLow
-                        )
-                    ) + fadeIn(),
-                    exit = slideOutVertically(targetOffsetY = { it / 2 }) + fadeOut()
-                ) {
-                    val timerState by focusTimerManager.state.collectAsStateWithLifecycle()
-                    LiveFocusBar(
-                        timerState = timerState,
-                        modifier = if (!isTopLevelScreen) Modifier.navigationBarsPadding() else Modifier,
-                        onExpandClick = {
-                            focusTimerManager.expand()
-                            navController.navigate(Screen.FocusTimer.route) {
-                                launchSingleTop = true
-                            }
-                        },
-                        onPauseResumeOrDismissClick = {
-                            if (timerState.status == TimerStatus.COMPLETED) {
-                                focusTimerManager.dismissOrCancel()
-                            } else {
-                                focusTimerManager.togglePauseResume()
-                            }
-                        },
-                        onSwipeDismiss = { focusTimerManager.hideLiveBar() }
-                    )
-                }
+    val snappyEasing = remember { CubicBezierEasing(0.22f, 1f, 0.36f, 1f) }
 
-                if (isTopLevelScreen) {
-                    ClayBottomNavBar(
-                        tabs = bottomNavTabs,
-                        selectedIndex = pagerState.currentPage,
-                        pageOffsetProvider = { pagerState.currentPageOffsetFraction },
-                        isDarkTheme = isDarkTheme,
-                        onTabSelected = { index ->
-                            scope.launch {
-                                pagerState.animateScrollToPage(index)
-                            }
+    Box(modifier = modifier.fillMaxSize()) {
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            contentWindowInsets = WindowInsets.statusBars,
+            containerColor = MaterialTheme.colorScheme.background,
+            snackbarHost = {
+                SnackbarHost(
+                    hostState = snackbarHostState,
+                    modifier = Modifier.navigationBarsPadding()
+                )
+            }
+        ) { innerPadding ->
+            NavHost(
+                navController = navController,
+                startDestination = MAIN_TABS_ROUTE,
+                modifier = Modifier
+                    .padding(innerPadding)
+                    .then(if (!isTopLevelScreen) Modifier.navigationBarsPadding() else Modifier),
+                enterTransition = {
+                    slideInHorizontally(
+                        initialOffsetX = { it },
+                        animationSpec = tween(durationMillis = 260, easing = snappyEasing)
+                    ) + fadeIn(animationSpec = tween(220))
+                },
+                exitTransition = {
+                    slideOutHorizontally(
+                        targetOffsetX = { -it / 4 },
+                        animationSpec = tween(durationMillis = 260, easing = snappyEasing)
+                    ) + fadeOut(animationSpec = tween(200))
+                },
+                popEnterTransition = {
+                    slideInHorizontally(
+                        initialOffsetX = { -it / 4 },
+                        animationSpec = tween(durationMillis = 260, easing = snappyEasing)
+                    ) + fadeIn(animationSpec = tween(220))
+                },
+                popExitTransition = {
+                    slideOutHorizontally(
+                        targetOffsetX = { it },
+                        animationSpec = tween(durationMillis = 260, easing = snappyEasing)
+                    ) + fadeOut(animationSpec = tween(200))
+                }
+            ) {
+                composable(MAIN_TABS_ROUTE) {
+                    val historyViewModel: HistoryViewModel = viewModel(
+                        factory = AppViewModelFactory(repository, preferencesManager = userPreferencesManager)
+                    )
+                    val statsViewModel: StatsViewModel = viewModel(
+                        factory = AppViewModelFactory(repository, preferencesManager = userPreferencesManager)
+                    )
+
+                    BackHandler(enabled = !isTimerExpanded && pagerState.currentPage != 0) {
+                        scope.launch {
+                            pagerState.animateScrollToPage(0)
                         }
-                    )
-                }
-            }
-        }
-    ) { innerPadding ->
-        NavHost(
-            navController = navController,
-            startDestination = MAIN_TABS_ROUTE,
-            modifier = Modifier.padding(innerPadding),
-            enterTransition = {
-                slideInHorizontally(
-                    initialOffsetX = { it / 3 },
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioLowBouncy,
-                        stiffness = Spring.StiffnessMediumLow
-                    )
-                ) + fadeIn(animationSpec = tween(220))
-            },
-            exitTransition = {
-                slideOutHorizontally(
-                    targetOffsetX = { -it / 4 },
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioLowBouncy,
-                        stiffness = Spring.StiffnessMediumLow
-                    )
-                ) + fadeOut(animationSpec = tween(180))
-            },
-            popEnterTransition = {
-                slideInHorizontally(
-                    initialOffsetX = { -it / 4 },
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioLowBouncy,
-                        stiffness = Spring.StiffnessMediumLow
-                    )
-                ) + fadeIn(animationSpec = tween(220))
-            },
-            popExitTransition = {
-                slideOutHorizontally(
-                    targetOffsetX = { it / 3 },
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioLowBouncy,
-                        stiffness = Spring.StiffnessMediumLow
-                    )
-                ) + fadeOut(animationSpec = tween(180))
-            }
-        ) {
-            composable(MAIN_TABS_ROUTE) {
-                val historyViewModel: HistoryViewModel = viewModel(
-                    factory = AppViewModelFactory(repository)
-                )
-                val statsViewModel: StatsViewModel = viewModel(
-                    factory = AppViewModelFactory(repository)
-                )
+                    }
 
-                HorizontalPager(
-                    state = pagerState,
-                    beyondViewportPageCount = 1,
-                    modifier = Modifier.fillMaxSize()
-                ) { page ->
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        HorizontalPager(
+                            state = pagerState,
+                            beyondViewportPageCount = 1,
+                            modifier = Modifier.weight(1f)
+                        ) { page ->
                     when (page) {
                         0 -> {
                             HomeScreen(
                                 uiState = homeUiState,
                                 unreadNotificationsCount = unreadCount,
-                                onNotificationsClick = {
-                                    navController.navigate(Screen.Notifications.route)
-                                },
-                                onMeClick = {
-                                    navController.navigate(Screen.Me.route)
-                                },
+                                onNotificationsClick = { navigateUtilityRoute(Screen.Notifications.route) },
+                                onMeClick = { navigateUtilityRoute(Screen.Me.route) },
                                 onAddFirstSubjectClick = {
-                                    navController.navigate(Screen.AddEditSubject.createRoute())
+                                    navigateSingleTop(Screen.AddEditSubject.createRoute())
                                 },
                                 onAddSessionClick = {
-                                    navController.navigate(Screen.AddEditSession.createRoute())
+                                    navigateSingleTop(Screen.AddEditSession.createRoute())
                                 },
                                 onQuickAddForSubject = { subjectId ->
-                                    navController.navigate(
+                                    navigateSingleTop(
                                         Screen.AddEditSession.createRoute(subjectId = subjectId)
                                     )
                                 },
@@ -311,11 +342,21 @@ fun EduTrackNavHost(
                                     }
                                 },
                                 onSessionClick = { sessionId ->
-                                    navController.navigate(Screen.SessionDetail.createRoute(sessionId))
+                                    navigateSingleTop(Screen.SessionDetail.createRoute(sessionId))
                                 },
                                 onManageSubjectsClick = {
                                     scope.launch {
                                         pagerState.animateScrollToPage(2)
+                                    }
+                                },
+                                onDynamicActionClick = { action ->
+                                    val targetPage = when (action) {
+                                        HomeMessageAction.OPEN_REMINDERS -> 3
+                                        HomeMessageAction.OPEN_SUBJECTS -> 2
+                                        HomeMessageAction.OPEN_PROGRESS -> 4
+                                    }
+                                    scope.launch {
+                                        pagerState.animateScrollToPage(targetPage)
                                     }
                                 },
                                 onViewAllHistoryClick = {
@@ -332,18 +373,17 @@ fun EduTrackNavHost(
                             HistoryScreen(
                                 uiState = uiState,
                                 unreadNotificationsCount = unreadCount,
-                                onNotificationsClick = { navController.navigate(Screen.Notifications.route) },
-                                onMeClick = { navController.navigate(Screen.Me.route) },
+                                onNotificationsClick = { navigateUtilityRoute(Screen.Notifications.route) },
+                                onMeClick = { navigateUtilityRoute(Screen.Me.route) },
                                 onSearchQueryChanged = historyViewModel::onSearchQueryChanged,
                                 onSelectSubjectFilter = historyViewModel::selectSubjectFilter,
                                 onSelectDateFilter = historyViewModel::selectDateFilter,
-                                onCustomDateRangeSelected = historyViewModel::setCustomDateRange,
                                 onClearFilters = historyViewModel::clearFilters,
                                 onSessionClick = { sessionId ->
-                                    navController.navigate(Screen.SessionDetail.createRoute(sessionId))
+                                    navigateSingleTop(Screen.SessionDetail.createRoute(sessionId))
                                 },
                                 onLogSessionClick = {
-                                    navController.navigate(Screen.AddEditSession.createRoute())
+                                    navigateSingleTop(Screen.AddEditSession.createRoute())
                                 }
                             )
                         }
@@ -354,18 +394,24 @@ fun EduTrackNavHost(
                             SubjectManagerScreen(
                                 uiState = uiState,
                                 unreadNotificationsCount = unreadCount,
-                                onNotificationsClick = { navController.navigate(Screen.Notifications.route) },
-                                onMeClick = { navController.navigate(Screen.Me.route) },
+                                onNotificationsClick = { navigateUtilityRoute(Screen.Notifications.route) },
+                                onMeClick = { navigateUtilityRoute(Screen.Me.route) },
                                 onAddClick = {
-                                    navController.navigate(Screen.AddEditSubject.createRoute())
+                                    navigateSingleTop(Screen.AddEditSubject.createRoute())
                                 },
                                 onEditScheduleClick = { subjectId ->
-                                    navController.navigate(Screen.AddEditSubject.createRoute(subjectId))
+                                    navigateSingleTop(Screen.AddEditSubject.createRoute(subjectId))
                                 },
                                 onStartFocusClick = { subject ->
-                                    focusTimerManager.startFocus(subject)
-                                    navController.navigate(Screen.FocusTimer.route) {
-                                        launchSingleTop = true
+                                    if (focusTimerManager.isAnotherSubjectRunning(subject.id)) {
+                                        blockedSubjectTarget = subject
+                                    } else {
+                                        val currentState = focusTimerManager.state.value
+                                        if (currentState.subject?.id == subject.id && currentState.isActive) {
+                                            focusTimerManager.expand()
+                                        } else {
+                                            focusTimerManager.startFocus(subject)
+                                        }
                                     }
                                 }
                             )
@@ -375,7 +421,7 @@ fun EduTrackNavHost(
                             val uiState by remindersViewModel.uiState.collectAsStateWithLifecycle()
 
                             LaunchedEffect(Unit) {
-                                remindersViewModel.events.collect { event ->
+                                remindersViewModel.listEvents.collect { event ->
                                     if (event is RemindersEvent.Feedback) {
                                         showFeedbackSnackbar(event.message)
                                     }
@@ -385,15 +431,15 @@ fun EduTrackNavHost(
                             RemindersScreen(
                                 uiState = uiState,
                                 unreadNotificationsCount = unreadCount,
-                                onNotificationsClick = { navController.navigate(Screen.Notifications.route) },
-                                onMeClick = { navController.navigate(Screen.Me.route) },
+                                onNotificationsClick = { navigateUtilityRoute(Screen.Notifications.route) },
+                                onMeClick = { navigateUtilityRoute(Screen.Me.route) },
                                 onAddReminderClick = {
-                                    navController.navigate(Screen.AddEditReminder.createRoute())
+                                    navigateSingleTop(Screen.AddEditReminder.createRoute())
                                 },
                                 onSelectTab = remindersViewModel::selectTab,
                                 onToggleComplete = remindersViewModel::toggleComplete,
                                 onReminderClick = { reminderId ->
-                                    navController.navigate(Screen.ReminderDetail.createRoute(reminderId))
+                                    navigateSingleTop(Screen.ReminderDetail.createRoute(reminderId))
                                 }
                             )
                         }
@@ -404,14 +450,29 @@ fun EduTrackNavHost(
                             StatsScreen(
                                 uiState = uiState,
                                 unreadNotificationsCount = unreadCount,
-                                onNotificationsClick = { navController.navigate(Screen.Notifications.route) },
-                                onMeClick = { navController.navigate(Screen.Me.route) },
+                                onNotificationsClick = { navigateUtilityRoute(Screen.Notifications.route) },
+                                onMeClick = { navigateUtilityRoute(Screen.Me.route) },
                                 onLogSessionClick = {
-                                    navController.navigate(Screen.AddEditSession.createRoute())
-                                }
+                                    navigateSingleTop(Screen.AddEditSession.createRoute())
+                                },
+                                onPrevWeekClick = { statsViewModel.shiftWeek(-1) },
+                                onNextWeekClick = { statsViewModel.shiftWeek(1) }
                             )
                         }
                     }
+                    }
+
+                    ClayBottomNavBar(
+                        tabs = bottomNavTabs,
+                        selectedIndex = pagerState.currentPage,
+                        pageOffsetProvider = { pagerState.currentPageOffsetFraction },
+                        isDarkTheme = isDarkTheme,
+                        onTabSelected = { index ->
+                            scope.launch {
+                                pagerState.animateScrollToPage(index)
+                            }
+                        }
+                    )
                 }
             }
 
@@ -431,11 +492,16 @@ fun EduTrackNavHost(
                     subjectManagerViewModel.loadSubjectForEdit(subjectId)
                 }
 
-                LaunchedEffect(Unit) {
+                LaunchedEffect(entry) {
                     subjectManagerViewModel.events.collect { event ->
                         when (event) {
                             is SubjectManagerEvent.Feedback -> showFeedbackSnackbar(event.message)
-                            is SubjectManagerEvent.SavedSuccess -> navController.popBackStack()
+                            is SubjectManagerEvent.SavedSuccess -> popSafely()
+                            is SubjectManagerEvent.DeletedSuccess -> {
+                                showFeedbackSnackbar(event.message)
+                                popSafely()
+                            }
+                            is SubjectManagerEvent.ErrorMessage -> showFeedbackSnackbar(event.message)
                         }
                     }
                 }
@@ -447,7 +513,7 @@ fun EduTrackNavHost(
                 AddEditSubjectScheduleScreen(
                     formState = uiState.formState,
                     editingSubject = editingSubject,
-                    onBackClick = { navController.popBackStack() },
+                    onBackClick = { popSafely() },
                     onNameChanged = subjectManagerViewModel::onNameChanged,
                     onDailyHoursChanged = subjectManagerViewModel::onDailyHoursChanged,
                     onDailyMinutesChanged = subjectManagerViewModel::onDailyMinutesChanged,
@@ -457,56 +523,10 @@ fun EduTrackNavHost(
                     onColorSelected = subjectManagerViewModel::onColorSelected,
                     onSaveClick = subjectManagerViewModel::saveSubject,
                     onDeleteClick = { subject ->
+                        focusTimerManager.dismissIfSubjectDeleted(subject.id)
                         subjectManagerViewModel.deleteSubject(subject)
-                        navController.popBackStack()
-                    }
-                )
-            }
-
-            composable(
-                route = Screen.FocusTimer.route,
-                enterTransition = {
-                    slideInVertically(
-                        initialOffsetY = { it },
-                        animationSpec = tween(340)
-                    ) + fadeIn(tween(260))
-                },
-                exitTransition = {
-                    slideOutVertically(
-                        targetOffsetY = { it },
-                        animationSpec = tween(380)
-                    ) + fadeOut(tween(300))
-                },
-                popExitTransition = {
-                    slideOutVertically(
-                        targetOffsetY = { it },
-                        animationSpec = tween(380)
-                    ) + fadeOut(tween(300))
-                }
-            ) {
-                val timerState by focusTimerManager.state.collectAsStateWithLifecycle()
-                FocusTimerScreen(
-                    timerState = timerState,
-                    onMinimizeClick = {
-                        focusTimerManager.minimize()
-                        navController.popBackStack()
                     },
-                    onPauseResumeClick = focusTimerManager::togglePauseResume,
-                    onEndWithoutCompletingClick = {
-                        focusTimerManager.dismissOrCancel()
-                        navController.popBackStack()
-                    },
-                    onOpenNotificationsClick = {
-                        focusTimerManager.dismissOrCancel()
-                        navController.navigate(Screen.Notifications.route) {
-                            popUpTo(Screen.FocusTimer.route) { inclusive = true }
-                        }
-                    },
-                    onBackToPlanClick = {
-                        focusTimerManager.dismissOrCancel()
-                        navController.popBackStack()
-                    },
-                    onStopAlarmClick = focusTimerManager::stopAlarm
+                    weekStartsOn = prefsState.weekStartsOn
                 )
             }
 
@@ -526,11 +546,11 @@ fun EduTrackNavHost(
                     remindersViewModel.loadReminderForEdit(reminderId)
                 }
 
-                LaunchedEffect(Unit) {
-                    remindersViewModel.events.collect { event ->
+                LaunchedEffect(entry) {
+                    remindersViewModel.editorEvents.collect { event ->
                         when (event) {
                             is RemindersEvent.Feedback -> showFeedbackSnackbar(event.message)
-                            is RemindersEvent.SavedSuccess -> navController.popBackStack()
+                            is RemindersEvent.SavedSuccess -> popSafely()
                             else -> Unit
                         }
                     }
@@ -538,7 +558,7 @@ fun EduTrackNavHost(
 
                 AddEditReminderScreen(
                     state = uiState.editorState,
-                    onBackClick = { navController.popBackStack() },
+                    onBackClick = { popSafely() },
                     onTitleChanged = remindersViewModel::onTitleChanged,
                     onNotesChanged = remindersViewModel::onNotesChanged,
                     onDueDateSelected = remindersViewModel::onDueDateSelected,
@@ -548,7 +568,9 @@ fun EduTrackNavHost(
                     onRepeatDaysMaskChanged = remindersViewModel::onRepeatDaysMaskChanged,
                     onPrioritySelected = remindersViewModel::onPrioritySelected,
                     onNotifyToggle = remindersViewModel::onNotifyToggle,
-                    onSaveClick = remindersViewModel::saveReminder
+                    onDismissPastTimeError = remindersViewModel::dismissPastTimeError,
+                    onSaveClick = remindersViewModel::saveReminder,
+                    weekStartsOn = prefsState.weekStartsOn
                 )
             }
 
@@ -561,15 +583,18 @@ fun EduTrackNavHost(
                 )
             ) { entry ->
                 val reminderId = entry.arguments?.getLong(Screen.ReminderDetail.ARG_REMINDER_ID) ?: -1L
-                val reminder by remember(reminderId) {
-                    remindersViewModel.observeReminder(reminderId)
-                }.collectAsStateWithLifecycle(initialValue = null)
+                val reminderState by remember(reminderId) {
+                    remindersViewModel.observeReminder(reminderId).map<_, Pair<Boolean, com.example.edutrack.data.local.entity.ReminderEntity?>> {
+                        false to it
+                    }
+                }.collectAsStateWithLifecycle(initialValue = true to null)
+                val (isLoadingReminder, reminder) = reminderState
 
-                LaunchedEffect(Unit) {
-                    remindersViewModel.events.collect { event ->
+                LaunchedEffect(entry) {
+                    remindersViewModel.detailEvents.collect { event ->
                         when (event) {
                             is RemindersEvent.Feedback -> showFeedbackSnackbar(event.message)
-                            is RemindersEvent.DeletedSuccess -> navController.popBackStack()
+                            is RemindersEvent.DeletedSuccess -> popSafely()
                             else -> Unit
                         }
                     }
@@ -577,26 +602,44 @@ fun EduTrackNavHost(
 
                 ReminderDetailScreen(
                     reminder = reminder,
-                    onBackClick = { navController.popBackStack() },
+                    isLoading = isLoadingReminder,
+                    onBackClick = { popSafely() },
                     onToggleComplete = remindersViewModel::toggleComplete,
                     onSnoozeClick = remindersViewModel::snoozeReminder,
+                    onSnoozeTomorrowClick = remindersViewModel::snoozeReminderToTomorrowMorning,
                     onEditClick = { id ->
-                        navController.navigate(Screen.AddEditReminder.createRoute(id))
+                        navigateSingleTop(Screen.AddEditReminder.createRoute(id))
                     },
                     onDeleteConfirm = remindersViewModel::deleteReminder,
                     onPreviewAlertClick = {
-                        focusTimerManager.previewAlarmTone(AlarmToneOption.fromName(prefsState.alarmTone))
-                        showFeedbackSnackbar("Playing due reminder alert preview")
+                        if (NotificationHelper.hasNotificationPermission(appContext)) {
+                            NotificationHelper.showReminderNotification(
+                                context = appContext,
+                                notificationId = 9999,
+                                title = reminder?.title ?: "Reminder preview",
+                                body = "This is how your scheduled reminder notification will appear.",
+                                toneUriString = prefsState.reminderToneUri
+                            )
+                            showFeedbackSnackbar("Preview reminder alert sent")
+                        } else {
+                            showFeedbackSnackbar("Enable notifications in Android Settings to preview alerts")
+                        }
                     }
                 )
             }
 
-            composable(Screen.Notifications.route) {
+            composable(Screen.Notifications.route) { entry ->
+                LaunchedEffect(entry) {
+                    notificationsViewModel.events.collect { message ->
+                        showFeedbackSnackbar(message)
+                    }
+                }
                 NotificationsScreen(
                     uiState = notificationsState,
-                    onBackClick = { navController.popBackStack() },
-                    onMeClick = { navController.navigate(Screen.Me.route) },
-                    onMarkAllReadClick = notificationsViewModel::markAllAsRead
+                    onBackClick = { popSafely() },
+                    onMeClick = { navigateUtilityRoute(Screen.Me.route) },
+                    onMarkAllReadClick = notificationsViewModel::markAllAsRead,
+                    onClearAllClick = notificationsViewModel::clearAll
                 )
             }
 
@@ -606,24 +649,35 @@ fun EduTrackNavHost(
                     unreadNotificationsCount = unreadCount,
                     prefs = prefsState,
                     isDarkTheme = isDarkTheme,
-                    onBackClick = { navController.popBackStack() },
-                    onNotificationsClick = { navController.navigate(Screen.Notifications.route) },
-                    onViewProgressClick = {
-                        navigateToMainTab(4)
+                    onBackClick = { popSafely() },
+                    onNotificationsClick = { navigateUtilityRoute(Screen.Notifications.route) },
+                    onViewProgressClick = { navigateToMainTab(4) },
+                    onMySchedulesClick = { navigateToMainTab(2) },
+                    onDailyReminderToggle = { enabled ->
+                        userPreferencesManager.setDailyReminderEnabled(enabled)
+                        ReminderAlarmScheduler.scheduleDailyStudyReminder(
+                            context = appContext,
+                            enabled = enabled,
+                            timeMinutes = prefsState.dailyReminderTimeMinutes
+                        )
                     },
-                    onMySchedulesClick = {
-                        navigateToMainTab(2)
+                    onReminderTimeChanged = { mins ->
+                        userPreferencesManager.setDailyReminderTimeMinutes(mins)
+                        ReminderAlarmScheduler.scheduleDailyStudyReminder(
+                            context = appContext,
+                            enabled = prefsState.dailyReminderEnabled,
+                            timeMinutes = mins
+                        )
                     },
-                    onDailyReminderToggle = userPreferencesManager::setDailyReminderEnabled,
-                    onReminderTimeChanged = userPreferencesManager::setDailyReminderTimeMinutes,
                     onTimerSoundToggle = userPreferencesManager::setTimerCompletionSound,
                     onToggleWeekStart = {
                         val next = if (prefsState.weekStartsOn == "Monday") "Sunday" else "Monday"
                         userPreferencesManager.setWeekStartsOn(next)
                     },
                     onToggleDarkTheme = { onToggleTheme() },
-                    onAlarmToneSelected = { tone -> userPreferencesManager.setAlarmTone(tone.name) },
-                    onPreviewAlarmTone = focusTimerManager::previewAlarmTone
+                    onTimerToneSelected = userPreferencesManager::setTimerTone,
+                    onReminderToneSelected = userPreferencesManager::setReminderTone,
+                    onNotificationToneSelected = userPreferencesManager::setNotificationTone
                 )
             }
 
@@ -651,12 +705,12 @@ fun EduTrackNavHost(
                 )
                 val uiState by addEditViewModel.uiState.collectAsStateWithLifecycle()
 
-                LaunchedEffect(Unit) {
+                LaunchedEffect(entry) {
                     addEditViewModel.events.collect { event ->
                         when (event) {
                             is AddEditSessionEvent.SavedSuccess -> {
                                 showFeedbackSnackbar(event.message)
-                                navController.popBackStack()
+                                popSafely()
                             }
                             is AddEditSessionEvent.ErrorMessage -> {
                                 showFeedbackSnackbar(event.message)
@@ -667,15 +721,13 @@ fun EduTrackNavHost(
 
                 AddEditSessionScreen(
                     uiState = uiState,
-                    onBackClick = { navController.popBackStack() },
+                    onBackClick = { popSafely() },
                     onSubjectSelected = addEditViewModel::onSubjectSelected,
                     onDurationChanged = addEditViewModel::onDurationChanged,
                     onDateSelected = addEditViewModel::onDateSelected,
                     onNotesChanged = addEditViewModel::onNotesChanged,
                     onSaveClick = addEditViewModel::saveSession,
-                    onManageSubjectsClick = {
-                        navigateToMainTab(2)
-                    }
+                    onManageSubjectsClick = { navigateToMainTab(2) }
                 )
             }
 
@@ -693,12 +745,12 @@ fun EduTrackNavHost(
                 )
                 val uiState by detailViewModel.uiState.collectAsStateWithLifecycle()
 
-                LaunchedEffect(Unit) {
+                LaunchedEffect(entry) {
                     detailViewModel.events.collect { event ->
                         when (event) {
                             is SessionDetailEvent.Deleted -> {
                                 showFeedbackSnackbar(event.message)
-                                navController.popBackStack()
+                                popSafely()
                             }
                             is SessionDetailEvent.Error -> {
                                 showFeedbackSnackbar(event.message)
@@ -710,12 +762,145 @@ fun EduTrackNavHost(
                 SessionDetailScreen(
                     uiState = uiState,
                     onEditClick = { id ->
-                        navController.navigate(Screen.AddEditSession.createRoute(sessionId = id))
+                        navigateSingleTop(Screen.AddEditSession.createRoute(sessionId = id))
                     },
                     onDeleteConfirm = detailViewModel::deleteSession,
-                    onBackClick = { navController.popBackStack() }
+                    onBackClick = { popSafely() }
                 )
             }
         }
+    }
+
+        // Overlay LiveFocusBar without triggering Scaffold innerPadding relayout
+        AnimatedVisibility(
+            visible = showLiveBar,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .then(
+                    if (isTopLevelScreen) {
+                        Modifier.navigationBarsPadding().padding(bottom = 78.dp)
+                    } else {
+                        Modifier.navigationBarsPadding()
+                    }
+                ),
+            enter = slideInVertically(
+                initialOffsetY = { it / 2 },
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioLowBouncy,
+                    stiffness = Spring.StiffnessMediumLow
+                )
+            ) + fadeIn(),
+            exit = slideOutVertically(targetOffsetY = { it / 2 }) + fadeOut()
+        ) {
+            val liveBarTimerState by focusTimerManager.state.collectAsStateWithLifecycle()
+            LiveFocusBar(
+                timerState = liveBarTimerState,
+                onExpandClick = {
+                    focusTimerManager.expand()
+                },
+                onPauseResumeOrDismissClick = {
+                    if (liveBarTimerState.status == TimerStatus.COMPLETED) {
+                        focusTimerManager.dismissOrCancel()
+                    } else {
+                        focusTimerManager.togglePauseResume()
+                    }
+                },
+                onSwipeDismiss = { focusTimerManager.hideLiveBar() }
+            )
+        }
+
+        // YouTube-style smooth full-screen vertical overlay for Focus Timer & Focus Complete
+        FocusTimerOverlayHost(
+            focusTimerManager = focusTimerManager,
+            isVisible = isTimerExpanded,
+            snappyEasing = snappyEasing,
+            onOpenNotificationsClick = { navigateUtilityRoute(Screen.Notifications.route) }
+        )
+    }
+
+    // Automatically bring the Focus Complete overlay up from any screen when timer hits 00:00
+    LaunchedEffect(timerStatus) {
+        if (timerStatus == TimerStatus.COMPLETED) {
+            focusTimerManager.expand()
+        }
+    }
+
+    blockedSubjectTarget?.let { targetSubject ->
+        val activeSubjectName = focusTimerManager.state.value.subject?.name ?: "your current subject"
+        AlertDialog(
+            onDismissRequest = { blockedSubjectTarget = null },
+            title = {
+                Text(
+                    text = "\"$activeSubjectName\" is running",
+                    fontWeight = FontWeight.SemiBold
+                )
+            },
+            text = {
+                Text(
+                    text = "You are currently studying \"$activeSubjectName\". Please pause it, finish it, or choose \"End without completing\" before starting \"${targetSubject.name}\"."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        blockedSubjectTarget = null
+                        focusTimerManager.expand()
+                    }
+                ) {
+                    Text(
+                        text = "Open $activeSubjectName",
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { blockedSubjectTarget = null }) {
+                    Text("OK")
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun FocusTimerOverlayHost(
+    focusTimerManager: FocusTimerManager,
+    isVisible: Boolean,
+    snappyEasing: CubicBezierEasing,
+    onOpenNotificationsClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val liveTimerState by focusTimerManager.state.collectAsStateWithLifecycle()
+    var retainedState by remember { mutableStateOf(liveTimerState) }
+    if (liveTimerState.isActive) {
+        retainedState = liveTimerState
+    }
+
+    AnimatedVisibility(
+        visible = isVisible,
+        modifier = modifier.fillMaxSize(),
+        enter = slideInVertically(
+            initialOffsetY = { it },
+            animationSpec = tween(durationMillis = 560, easing = snappyEasing)
+        ) + fadeIn(animationSpec = tween(durationMillis = 360)),
+        exit = slideOutVertically(
+            targetOffsetY = { it },
+            animationSpec = tween(durationMillis = 580, easing = snappyEasing)
+        ) + fadeOut(animationSpec = tween(durationMillis = 360))
+    ) {
+        FocusTimerScreen(
+            timerState = if (liveTimerState.isActive) liveTimerState else retainedState,
+            isBackEnabled = isVisible,
+            onMinimizeClick = focusTimerManager::minimize,
+            onPauseResumeClick = focusTimerManager::togglePauseResume,
+            onEndWithoutCompletingClick = focusTimerManager::completeNowManually,
+            onOpenNotificationsClick = {
+                focusTimerManager.dismissOrCancel()
+                onOpenNotificationsClick()
+            },
+            onBackToPlanClick = focusTimerManager::dismissOrCancel,
+            onStopAlarmClick = focusTimerManager::stopAlarm
+        )
     }
 }

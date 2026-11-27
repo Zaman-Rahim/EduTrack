@@ -6,7 +6,6 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -38,11 +37,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -51,11 +47,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.edutrack.ui.theme.DarkBorderFigma
-import com.example.edutrack.ui.theme.ForestGreenPrimary
+import com.example.edutrack.ui.theme.ForestGreenDark
 import com.example.edutrack.ui.theme.LimeAccent
-import com.example.edutrack.ui.theme.MutedText
-import com.example.edutrack.ui.theme.TrackBorder
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.sin
@@ -87,8 +80,8 @@ fun ClayBottomNavBar(
     if (tabs.isEmpty()) return
 
     val safeSelectedIndex = selectedIndex.coerceIn(0, tabs.lastIndex)
-    val dividerColor = if (isDarkTheme) DarkBorderFigma else TrackBorder
-    val unselectedColor = if (isDarkTheme) MaterialTheme.colorScheme.onSurfaceVariant else MutedText
+    val dividerColor = MaterialTheme.colorScheme.outline
+    val unselectedColor = MaterialTheme.colorScheme.onSurfaceVariant
 
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -110,9 +103,8 @@ fun ClayBottomNavBar(
                 val pillHeight = 40.dp
                 val pillTopOffset = 7.dp
 
-                // Zero-recomposition GPU-driven sliding 3D clay-textured LimeAccent pill
+                // Zero-recomposition GPU-driven sliding LimeAccent pill
                 ClayIndicatorPill(
-                    isDarkTheme = isDarkTheme,
                     modifier = Modifier
                         .offset {
                             val clampedOffset = pageOffsetProvider().coerceIn(-1f, 1f)
@@ -185,12 +177,12 @@ private fun RowScope.ClayNavTabItem(
     )
 
     val iconTint by animateColorAsState(
-        targetValue = if (isSelected) ForestGreenPrimary else unselectedColor,
+        targetValue = if (isSelected) ForestGreenDark else unselectedColor,
         label = "clayIconTint"
     )
     val labelColor by animateColorAsState(
         targetValue = if (isSelected) {
-            if (isDarkTheme) LimeAccent else ForestGreenPrimary
+            if (isDarkTheme) LimeAccent else ForestGreenDark
         } else {
             unselectedColor
         },
@@ -249,15 +241,11 @@ private fun RowScope.ClayNavTabItem(
  */
 @Composable
 private fun ClayIndicatorPill(
-    isDarkTheme: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val pillShape = RoundedCornerShape(50)
-    val pillColor = if (isDarkTheme) LimeAccent else LimeAccent
-
     Box(
         modifier = modifier
-            .clip(pillShape)
-            .background(pillColor)
+            .clip(RoundedCornerShape(50))
+            .background(LimeAccent)
     )
 }

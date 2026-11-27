@@ -1,5 +1,11 @@
 package com.example.edutrack.ui.screens.reminders
 
+import android.app.AlarmManager
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -19,10 +25,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.NotificationsNone
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -30,28 +32,37 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.edutrack.R
 import com.example.edutrack.data.local.entity.ReminderEntity
 import com.example.edutrack.data.local.entity.ReminderPriority
-import com.example.edutrack.data.local.entity.ReminderRepeatType
+import com.example.edutrack.ui.components.ClayButton
 import com.example.edutrack.ui.components.ClaySegmentedControl
+import com.example.edutrack.ui.components.EmptyStateCard
 import com.example.edutrack.ui.components.TopRightHeaderButtons
 import com.example.edutrack.ui.components.bounceClick
-import com.example.edutrack.ui.theme.DeleteRedBg
-import com.example.edutrack.ui.theme.DeleteRedText
 import com.example.edutrack.ui.theme.ForestGreenDark
-import com.example.edutrack.ui.theme.ForestGreenPrimary
 import com.example.edutrack.ui.theme.LimeAccent
 import com.example.edutrack.ui.viewmodel.ReminderTabFilter
 import com.example.edutrack.ui.viewmodel.RemindersUiState
@@ -70,13 +81,35 @@ fun RemindersScreen(
     onReminderClick: (Long) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var canScheduleExact by remember { mutableStateOf(checkCanScheduleExactAlarms(context)) }
+    var dismissedExactAlarmNotice by remember { mutableStateOf(false) }
+
+    DisposableEffect(lifecycleOwner, context) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                canScheduleExact = checkCanScheduleExactAlarms(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    val showExactAlarmNotice = !canScheduleExact &&
+        !dismissedExactAlarmNotice &&
+        uiState.selectedTab != ReminderTabFilter.COMPLETED &&
+        uiState.visibleReminders.any { !it.isCompleted && it.notifyEnabled }
+
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 28.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         // Header
-        item {
+        item(key = "header", contentType = "header") {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -105,18 +138,14 @@ fun RemindersScreen(
         }
 
         // Exact Figma Lime "+ Add reminder" CTA
-        item {
-            Button(
+        item(key = "add_cta", contentType = "add_cta") {
+            ClayButton(
                 onClick = onAddReminderClick,
+                containerColor = LimeAccent,
+                contentColor = ForestGreenDark,
                 shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = LimeAccent,
-                    contentColor = ForestGreenDark
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp)
-                    .bounceClick(onClick = onAddReminderClick)
+                height = 52.dp,
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
                     text = "+  Add reminder",
@@ -126,11 +155,18 @@ fun RemindersScreen(
             }
         }
 
-        // 3-Way Segmented Filter Bar (Today | Upcoming | Completed) matching Figma 24:25
-        item {
+        // 3-Way Segmented Filter Bar (Today | Upcoming | Completed (N)) matching Figma 24:25
+        item(key = "filter_bar", contentType = "filter_bar") {
             val tabs = ReminderTabFilter.entries
+            val options = tabs.map { tab ->
+                if (tab == ReminderTabFilter.COMPLETED) {
+                    "${tab.label} (${uiState.completedTodayCount})"
+                } else {
+                    tab.label
+                }
+            }
             ClaySegmentedControl(
-                options = tabs.map { it.label },
+                options = options,
                 selectedIndex = tabs.indexOf(uiState.selectedTab).coerceAtLeast(0),
                 onOptionSelected = { index ->
                     onSelectTab(tabs[index])
@@ -138,7 +174,16 @@ fun RemindersScreen(
             )
         }
 
-        item {
+        if (showExactAlarmNotice) {
+            item(key = "exact_alarm_guidance", contentType = "guidance_banner") {
+                ExactAlarmGuidanceCard(
+                    onAllowClick = { openExactAlarmSettings(context) },
+                    onDismissClick = { dismissedExactAlarmNotice = true }
+                )
+            }
+        }
+
+        item(key = "section_header", contentType = "section_header") {
             val sectionHeader = when (uiState.selectedTab) {
                 ReminderTabFilter.TODAY -> "TODAY’S REMINDERS"
                 ReminderTabFilter.UPCOMING -> "UPCOMING REMINDERS"
@@ -155,62 +200,91 @@ fun RemindersScreen(
         }
 
         if (!uiState.isLoading && uiState.visibleReminders.isEmpty()) {
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    )
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.NotificationsNone,
-                            contentDescription = null,
-                            modifier = Modifier.size(44.dp),
-                            tint = ForestGreenPrimary
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                            text = "No reminders here",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            textAlign = TextAlign.Center
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = "Tap '+ Add reminder' above to schedule an assignment, exam, or daily personal task.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Button(
-                            onClick = onAddReminderClick,
-                            shape = RoundedCornerShape(16.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = ForestGreenPrimary,
-                                contentColor = Color.White
-                            ),
-                            modifier = Modifier.bounceClick(onClick = onAddReminderClick)
-                        ) {
-                            Text("Add Reminder")
-                        }
-                    }
-                }
+            item(key = "empty_state", contentType = "empty_state") {
+                EmptyStateCard(
+                    iconRes = R.drawable.ic_figma_bell,
+                    title = "No reminders here",
+                    description = "Tap '+ Add reminder' above to schedule an assignment, exam, or daily personal task.",
+                    actionLabel = "Add Reminder",
+                    onActionClick = onAddReminderClick
+                )
             }
         } else {
-            items(uiState.visibleReminders, key = { "rem_${it.id}" }) { reminder ->
+            items(
+                items = uiState.visibleReminders,
+                key = { "rem_${it.id}" },
+                contentType = { "reminder_card" }
+            ) { reminder ->
                 ReminderListCard(
                     reminder = reminder,
                     onToggleComplete = { onToggleComplete(reminder) },
-                    onClick = { onReminderClick(reminder.id) }
+                    onClick = { onReminderClick(reminder.id) },
+                    modifier = Modifier.animateItem()
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExactAlarmGuidanceCard(
+    onAllowClick: () -> Unit,
+    onDismissClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = "Exact alarm permission is off",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+            Text(
+                text = "Allow exact alarms so scheduled reminders ring on time even in battery saver mode.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .bounceClick(onClick = onDismissClick)
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                ) {
+                    Text(
+                        text = "Dismiss",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                ClayButton(
+                    onClick = onAllowClick,
+                    height = 36.dp,
+                    shape = RoundedCornerShape(12.dp),
+                    contentPadding = PaddingValues(horizontal = 14.dp)
+                ) {
+                    Text(
+                        text = "Allow exact",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
             }
         }
     }
@@ -220,7 +294,8 @@ fun RemindersScreen(
 private fun ReminderListCard(
     reminder: ReminderEntity,
     onToggleComplete: () -> Unit,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val todayEpoch = DateTimeUtils.todayEpochDay()
     val dateLabel = when (reminder.dueDateEpochDay) {
@@ -234,44 +309,61 @@ private fun ReminderListCard(
     val isHighPriority = reminder.priority == ReminderPriority.HIGH.name
 
     Card(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
             .bounceClick(scaleDown = 0.98f, onClick = onClick),
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, Color(0xFFCCD8C4)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 15.dp, vertical = 14.dp),
+                .padding(start = 4.dp, end = 15.dp, top = 8.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // 48.dp minimum accessible touch target wrapping the 24.dp visual checkbox
             Box(
                 modifier = Modifier
-                    .size(24.dp)
+                    .size(48.dp)
                     .clip(CircleShape)
-                    .background(if (reminder.isCompleted) ForestGreenPrimary else MaterialTheme.colorScheme.background)
-                    .border(
-                        width = 1.dp,
-                        color = if (reminder.isCompleted) ForestGreenPrimary else Color(0xFFCCD8C4),
-                        shape = CircleShape
-                    )
+                    .semantics {
+                        role = Role.Checkbox
+                        stateDescription = if (reminder.isCompleted) "Completed" else "Not completed"
+                    }
                     .bounceClick(onClick = onToggleComplete),
                 contentAlignment = Alignment.Center
             ) {
-                if (reminder.isCompleted) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_figma_check),
-                        contentDescription = "Completed",
-                        tint = LimeAccent,
-                        modifier = Modifier.size(15.dp)
-                    )
+                Box(
+                    modifier = Modifier
+                        .size(24.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (reminder.isCompleted) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.background
+                        )
+                        .border(
+                            width = 1.5.dp,
+                            color = if (reminder.isCompleted) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.outline,
+                            shape = CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (reminder.isCompleted) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_figma_check),
+                            contentDescription = "Completed",
+                            tint = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.size(15.dp)
+                        )
+                    }
                 }
             }
 
-            Spacer(modifier = Modifier.width(13.dp))
+            Spacer(modifier = Modifier.width(2.dp))
 
             Column(modifier = Modifier.weight(1f)) {
                 Row(
@@ -292,13 +384,13 @@ private fun ReminderListCard(
                     if (isHighPriority && !reminder.isCompleted) {
                         Surface(
                             shape = RoundedCornerShape(8.dp),
-                            color = DeleteRedBg
+                            color = MaterialTheme.colorScheme.errorContainer
                         ) {
                             Text(
                                 text = "High",
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = DeleteRedText,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )
                         }
@@ -326,4 +418,24 @@ private fun ReminderListCard(
             )
         }
     }
+}
+
+private fun checkCanScheduleExactAlarms(context: Context): Boolean {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
+    val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return true
+    return runCatching { alarmManager.canScheduleExactAlarms() }.getOrDefault(true)
+}
+
+private fun openExactAlarmSettings(context: Context) {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
+    val packageIntent = Intent(
+        Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+        Uri.parse("package:${context.packageName}")
+    ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    runCatching { context.startActivity(packageIntent) }
+        .onFailure {
+            val fallbackIntent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            runCatching { context.startActivity(fallbackIntent) }
+        }
 }

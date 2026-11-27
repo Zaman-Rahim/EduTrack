@@ -5,8 +5,7 @@ import androidx.room.PrimaryKey
 
 enum class NotificationType {
     FOCUS_COMPLETE,
-    REMINDER,
-    INFO
+    REMINDER
 }
 
 /**

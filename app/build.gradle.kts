@@ -15,11 +15,6 @@ android {
         targetSdk = 35
         versionCode = (project.findProperty("VERSION_CODE") as String?)?.toIntOrNull() ?: 1
         versionName = (project.findProperty("VERSION_NAME") as String?) ?: "1.0.0"
-
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        vectorDrawables {
-            useSupportLibrary = true
-        }
     }
 
     signingConfigs {
@@ -78,9 +73,7 @@ dependencies {
     // Jetpack Compose & Material 3
     implementation("androidx.compose.ui:ui:1.7.5")
     implementation("androidx.compose.ui:ui-graphics:1.7.5")
-    implementation("androidx.compose.ui:ui-tooling-preview:1.7.5")
     implementation("androidx.compose.material3:material3:1.3.1")
-    implementation("androidx.compose.material:material-icons-extended:1.7.5")
 
     // Navigation Compose
     implementation("androidx.navigation:navigation-compose:2.8.5")
@@ -95,7 +88,4 @@ dependencies {
 
     // Unit Testing
     testImplementation("junit:junit:4.13.2")
-
-    // Debug Tooling
-    debugImplementation("androidx.compose.ui:ui-tooling:1.7.5")
 }

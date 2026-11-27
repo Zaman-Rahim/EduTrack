@@ -1,6 +1,5 @@
 package com.example.edutrack.ui.screens.subjects
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -20,16 +19,16 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,10 +45,8 @@ import com.example.edutrack.ui.components.EmptyStateCard
 import com.example.edutrack.ui.components.TopRightHeaderButtons
 import com.example.edutrack.ui.components.bounceClick
 import com.example.edutrack.ui.components.figmaSubjectIconRes
-import com.example.edutrack.ui.theme.CardLightGreen
 import com.example.edutrack.ui.theme.ForestGreenDark
-import com.example.edutrack.ui.theme.ForestGreenPrimary
-import com.example.edutrack.ui.theme.LimeAccent
+import com.example.edutrack.ui.theme.subjectPastelContainer
 import com.example.edutrack.ui.viewmodel.SubjectItemUi
 import com.example.edutrack.ui.viewmodel.SubjectManagerUiState
 import com.example.edutrack.util.DateTimeUtils
@@ -65,7 +62,9 @@ fun SubjectManagerScreen(
     onStartFocusClick: (SubjectEntity) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val todayText = "Today · ${DateTimeUtils.formatFullDate(DateTimeUtils.todayEpochDay())}"
+    val todayText = remember {
+        "Today · ${DateTimeUtils.formatFullDate(DateTimeUtils.todayEpochDay())}"
+    }
 
     Box(modifier = modifier.fillMaxSize()) {
         LazyColumn(
@@ -74,7 +73,7 @@ fun SubjectManagerScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // Exact Figma Header with Bell + Me on top right
-            item {
+            item(key = "subjects_header", contentType = "header") {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -85,15 +84,20 @@ fun SubjectManagerScreen(
                             text = "Your subjects",
                             style = MaterialTheme.typography.headlineMedium.copy(fontSize = 28.sp),
                             fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onBackground
+                            color = MaterialTheme.colorScheme.onBackground,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = todayText,
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
+                    Spacer(modifier = Modifier.width(8.dp))
                     TopRightHeaderButtons(
                         unreadNotificationsCount = unreadNotificationsCount,
                         onNotificationsClick = onNotificationsClick,
@@ -102,11 +106,22 @@ fun SubjectManagerScreen(
                 }
             }
 
-            if (!uiState.isLoading && uiState.allSubjects.isEmpty()) {
-                item {
+            if (uiState.isLoading && uiState.allSubjects.isEmpty()) {
+                item(key = "subjects_loading", contentType = "loading") {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 48.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            } else if (!uiState.isLoading && uiState.allSubjects.isEmpty()) {
+                item(key = "subjects_empty", contentType = "empty_state") {
                     Spacer(modifier = Modifier.height(8.dp))
                     EmptyStateCard(
-                        icon = Icons.AutoMirrored.Outlined.MenuBook,
+                        iconRes = R.drawable.ic_figma_book,
                         title = "No subjects in your plan yet",
                         description = "Tap the + button in the bottom right to add a subject with your daily target minutes and repeat schedule.",
                         actionLabel = "Add First Subject",
@@ -116,7 +131,7 @@ fun SubjectManagerScreen(
             } else {
                 // Ready to focus section
                 if (uiState.readyToday.isNotEmpty()) {
-                    item {
+                    item(key = "ready_header", contentType = "section_header") {
                         Text(
                             text = "Ready to focus",
                             style = MaterialTheme.typography.titleSmall,
@@ -125,18 +140,23 @@ fun SubjectManagerScreen(
                             modifier = Modifier.padding(top = 6.dp)
                         )
                     }
-                    items(uiState.readyToday, key = { "ready_${it.subject.id}" }) { item ->
+                    items(
+                        items = uiState.readyToday,
+                        key = { "ready_${it.subject.id}" },
+                        contentType = { "ready_card" }
+                    ) { item ->
                         ReadySubjectTodoCard(
                             item = item,
                             onCardClick = { onStartFocusClick(item.subject) },
-                            onEditClick = { onEditScheduleClick(item.subject.id) }
+                            onEditClick = { onEditScheduleClick(item.subject.id) },
+                            modifier = Modifier.animateItem()
                         )
                     }
                 }
 
-                // Completed today section (crossed out & moved down!)
-                item {
-                    AnimatedVisibility(visible = uiState.completedToday.isNotEmpty()) {
+                // Completed today section (crossed out & moved down)
+                if (uiState.completedToday.isNotEmpty()) {
+                    item(key = "completed_header", contentType = "section_header") {
                         Text(
                             text = "Completed today",
                             style = MaterialTheme.typography.titleSmall,
@@ -145,18 +165,23 @@ fun SubjectManagerScreen(
                             modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
                         )
                     }
-                }
-                items(uiState.completedToday, key = { "done_${it.subject.id}" }) { item ->
-                    CompletedSubjectTodoCard(
-                        item = item,
-                        onEditClick = { onEditScheduleClick(item.subject.id) },
-                        onRestartFocusClick = { onStartFocusClick(item.subject) }
-                    )
+                    items(
+                        items = uiState.completedToday,
+                        key = { "done_${it.subject.id}" },
+                        contentType = { "completed_card" }
+                    ) { item ->
+                        CompletedSubjectTodoCard(
+                            item = item,
+                            onEditClick = { onEditScheduleClick(item.subject.id) },
+                            onRestartFocusClick = { onStartFocusClick(item.subject) },
+                            modifier = Modifier.animateItem()
+                        )
+                    }
                 }
 
                 // Day-off / other days section
                 if (uiState.offToday.isNotEmpty()) {
-                    item {
+                    item(key = "off_header", contentType = "section_header") {
                         Text(
                             text = "Scheduled on other days",
                             style = MaterialTheme.typography.titleSmall,
@@ -165,24 +190,29 @@ fun SubjectManagerScreen(
                             modifier = Modifier.padding(top = 10.dp)
                         )
                     }
-                    items(uiState.offToday, key = { "off_${it.subject.id}" }) { item ->
+                    items(
+                        items = uiState.offToday,
+                        key = { "off_${it.subject.id}" },
+                        contentType = { "ready_card" }
+                    ) { item ->
                         ReadySubjectTodoCard(
                             item = item,
                             isDimmed = true,
                             onCardClick = { onStartFocusClick(item.subject) },
-                            onEditClick = { onEditScheduleClick(item.subject.id) }
+                            onEditClick = { onEditScheduleClick(item.subject.id) },
+                            modifier = Modifier.animateItem()
                         )
                     }
                 }
             }
         }
 
-        // Small compact Floating Action Button on the bottom right (matching user request)
+        // Compact Floating Action Button on the bottom right
         FloatingActionButton(
             onClick = onAddClick,
             shape = RoundedCornerShape(16.dp),
-            containerColor = ForestGreenPrimary,
-            contentColor = Color.White,
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
             elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 4.dp),
             modifier = Modifier
                 .align(Alignment.BottomEnd)
@@ -192,7 +222,7 @@ fun SubjectManagerScreen(
             Icon(
                 painter = painterResource(id = R.drawable.ic_figma_plus),
                 contentDescription = "Add subject",
-                tint = Color.White,
+                tint = MaterialTheme.colorScheme.onPrimary,
                 modifier = Modifier.size(22.dp)
             )
         }
@@ -204,26 +234,34 @@ private fun ReadySubjectTodoCard(
     item: SubjectItemUi,
     isDimmed: Boolean = false,
     onCardClick: () -> Unit,
-    onEditClick: () -> Unit
+    onEditClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val tagColor = Color(item.subject.colorHex)
-    val badgeBg = tagColor.copy(alpha = 0.28f)
-    val remainingMinutes = (item.subject.dailyGoalMinutes - item.todayMinutesLogged).coerceAtLeast(1)
-    val targetText = if (item.todayMinutesLogged > 0) {
-        "${DateTimeUtils.formatDuration(remainingMinutes)} left today · ${DateTimeUtils.formatDuration(item.subject.dailyGoalMinutes)} goal"
-    } else {
-        "${DateTimeUtils.formatDuration(item.subject.dailyGoalMinutes)} daily target"
+    val badgeBg = subjectPastelContainer(item.subject.colorHex)
+    val targetText = when {
+        item.todayMinutesLogged >= item.subject.dailyGoalMinutes ->
+            "${DateTimeUtils.formatDuration(item.todayMinutesLogged)} logged today · ${DateTimeUtils.formatDuration(item.subject.dailyGoalMinutes)} goal"
+        item.todayMinutesLogged > 0 -> {
+            val remainingMinutes = item.subject.dailyGoalMinutes - item.todayMinutesLogged
+            "${DateTimeUtils.formatDuration(remainingMinutes)} left today · ${DateTimeUtils.formatDuration(item.subject.dailyGoalMinutes)} goal"
+        }
+        else -> "${DateTimeUtils.formatDuration(item.subject.dailyGoalMinutes)} daily target"
     }
 
     Card(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .bounceClick(scaleDown = 0.98f, onClick = onCardClick),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (isDimmed) MaterialTheme.colorScheme.surface.copy(alpha = 0.78f) else MaterialTheme.colorScheme.surface
+            containerColor = if (isDimmed) {
+                MaterialTheme.colorScheme.surface.copy(alpha = 0.78f)
+            } else {
+                MaterialTheme.colorScheme.surface
+            }
         ),
-        border = BorderStroke(1.dp, Color(0xFFC2D1B8)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(
@@ -285,10 +323,10 @@ private fun ReadySubjectTodoCard(
 
                 Spacer(modifier = Modifier.width(6.dp))
 
-                // Edit schedule circular button
+                // Edit schedule circular button (>=44dp touch target)
                 Box(
                     modifier = Modifier
-                        .size(36.dp)
+                        .size(44.dp)
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.background)
                         .bounceClick(onClick = onEditClick),
@@ -304,19 +342,19 @@ private fun ReadySubjectTodoCard(
 
                 Spacer(modifier = Modifier.width(8.dp))
 
-                // Start Focus Play button
+                // Start Focus Play button (>=44dp touch target)
                 Box(
                     modifier = Modifier
-                        .size(40.dp)
+                        .size(44.dp)
                         .clip(CircleShape)
-                        .background(CardLightGreen)
+                        .background(MaterialTheme.colorScheme.primaryContainer)
                         .bounceClick(onClick = onCardClick),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         painter = painterResource(id = R.drawable.ic_figma_play),
                         contentDescription = "Start focus",
-                        tint = ForestGreenPrimary,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -327,7 +365,9 @@ private fun ReadySubjectTodoCard(
             Text(
                 text = item.subject.formatScheduleSummary(),
                 fontSize = 11.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
@@ -337,15 +377,16 @@ private fun ReadySubjectTodoCard(
 private fun CompletedSubjectTodoCard(
     item: SubjectItemUi,
     onEditClick: () -> Unit,
-    onRestartFocusClick: () -> Unit
+    onRestartFocusClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val tagColor = Color(item.subject.colorHex)
     Card(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .bounceClick(scaleDown = 0.98f, onClick = onRestartFocusClick),
         shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = CardLightGreen),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Row(
@@ -358,13 +399,13 @@ private fun CompletedSubjectTodoCard(
                 modifier = Modifier
                     .size(24.dp)
                     .clip(CircleShape)
-                    .background(ForestGreenPrimary),
+                    .background(MaterialTheme.colorScheme.primary),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     painter = painterResource(id = R.drawable.ic_figma_check),
                     contentDescription = "Completed",
-                    tint = LimeAccent,
+                    tint = MaterialTheme.colorScheme.onPrimary,
                     modifier = Modifier.size(16.dp)
                 )
             }
@@ -388,7 +429,7 @@ private fun CompletedSubjectTodoCard(
                             textDecoration = TextDecoration.LineThrough
                         ),
                         fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.78f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -397,15 +438,19 @@ private fun CompletedSubjectTodoCard(
                 Text(
                     text = "${DateTimeUtils.formatDuration(item.todayMinutesLogged)} logged · Daily goal reached",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
 
+            Spacer(modifier = Modifier.width(8.dp))
+
             Box(
                 modifier = Modifier
-                    .size(36.dp)
+                    .size(44.dp)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.background)
+                    .background(MaterialTheme.colorScheme.surface)
                     .bounceClick(onClick = onEditClick),
                 contentAlignment = Alignment.Center
             ) {
