@@ -14,9 +14,9 @@
 
 ### 📲 Download Latest Test Build on Android
 
-[![Download Latest APK](https://img.shields.io/badge/Download-EduTrack--debug.apk-194D3E?style=for-the-badge&logo=android&logoColor=D8F478)](https://github.com/Zaman-Rahim/EduTrack/releases/download/latest-apk/EduTrack-debug.apk)
+[![Download Latest APK](https://img.shields.io/badge/Download-EduTrack--debug.apk-194D3E?style=for-the-badge&logo=android&logoColor=D8F478)](https://github.com/Zaman-Rahim/EduTrack/releases/latest/download/EduTrack-debug.apk)
 &nbsp;
-[![View All Releases](https://img.shields.io/badge/GitHub-Releases-183D33?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Zaman-Rahim/EduTrack/releases)
+[![View All Releases](https://img.shields.io/badge/GitHub-Releases-183D33?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Zaman-Rahim/EduTrack/releases/latest)
 
 *Tap **Download EduTrack-debug.apk** directly from your Android phone's browser to install and test the latest build.*
 

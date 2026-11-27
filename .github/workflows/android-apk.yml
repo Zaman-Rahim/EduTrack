@@ -71,11 +71,11 @@ jobs:
           sed -i 's/^          //' dist/release_notes.md
 
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release edit "$TAG" --title "$TITLE" --notes-file dist/release_notes.md
-            gh release upload "$TAG" dist/EduTrack-debug.apk --clobber
-          else
-            gh release create "$TAG" dist/EduTrack-debug.apk \
-              --title "$TITLE" \
-              --notes-file dist/release_notes.md \
-              --prerelease
+            gh release delete "$TAG" --yes --cleanup-tag || true
           fi
+
+          gh release create "$TAG" dist/EduTrack-debug.apk "dist/EduTrack-build-${{ github.run_number }}.apk" \
+            --target "${{ github.sha }}" \
+            --title "$TITLE" \
+            --notes-file dist/release_notes.md \
+            --latest
