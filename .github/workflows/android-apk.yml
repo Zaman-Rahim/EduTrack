@@ -36,22 +36,22 @@ jobs:
         run: chmod +x gradlew
 
       - name: Run unit tests
-        run: ./gradlew testDebugUnitTest --no-daemon
+        run: ./gradlew testDebugUnitTest -PVERSION_CODE=${{ github.run_number }} -PVERSION_NAME=1.0.${{ github.run_number }} --no-daemon
 
       - name: Build Debug APK
-        run: ./gradlew assembleDebug --no-daemon
+        run: ./gradlew assembleDebug -PVERSION_CODE=${{ github.run_number }} -PVERSION_NAME=1.0.${{ github.run_number }} --no-daemon
 
       - name: Prepare named APK files
         run: |
           mkdir -p dist
           cp app/build/outputs/apk/debug/app-debug.apk "dist/EduTrack-debug.apk"
-          cp app/build/outputs/apk/debug/app-debug.apk "dist/EduTrack-build-${{ github.run_number }}.apk"
+          cp app/build/outputs/apk/debug/app-debug.apk "dist/EduTrack-v1.0.${{ github.run_number }}.apk"
 
       - name: Upload APK as Workflow Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EduTrack-APK-build-${{ github.run_number }}
-          path: dist/EduTrack-build-${{ github.run_number }}.apk
+          name: EduTrack-APK-v1.0.${{ github.run_number }}
+          path: dist/EduTrack-v1.0.${{ github.run_number }}.apk
           retention-days: 30
 
       - name: Publish Direct-Download APK to GitHub Releases
@@ -60,13 +60,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="latest-apk"
-          TITLE="Latest EduTrack Test APK (Build #${{ github.run_number }})"
+          TITLE="EduTrack v1.0.${{ github.run_number }} (Build #${{ github.run_number }})"
           cat << 'EOF' > dist/release_notes.md
-          Automatic Android Debug APK build from GitHub Actions.
+          Automatic Android Debug APK build from GitHub Actions (`v1.0.${{ github.run_number }}`).
 
-          ### How to install on your Android phone
-          1. Tap **EduTrack-debug.apk** below to download directly on your phone.
-          2. Open the downloaded `.apk` file and tap **Install** (allow *Install unknown apps* if prompted).
+          ### How to install / update on your Android phone
+          1. Tap **EduTrack-debug.apk** (or **EduTrack-v1.0.${{ github.run_number }}.apk**) below to download directly on your phone.
+          2. Open the downloaded `.apk` file and tap **Update** / **Install** — your existing study subjects, sessions, and reminders are preserved.
           EOF
           sed -i 's/^          //' dist/release_notes.md
 
@@ -74,7 +74,7 @@ jobs:
             gh release delete "$TAG" --yes --cleanup-tag || true
           fi
 
-          gh release create "$TAG" dist/EduTrack-debug.apk "dist/EduTrack-build-${{ github.run_number }}.apk" \
+          gh release create "$TAG" dist/EduTrack-debug.apk "dist/EduTrack-v1.0.${{ github.run_number }}.apk" \
             --target "${{ github.sha }}" \
             --title "$TITLE" \
             --notes-file dist/release_notes.md \

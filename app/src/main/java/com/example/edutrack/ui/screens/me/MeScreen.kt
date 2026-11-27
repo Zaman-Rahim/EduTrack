@@ -47,6 +47,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.edutrack.BuildConfig
 import com.example.edutrack.R
 import com.example.edutrack.data.preferences.AlarmToneOption
 import com.example.edutrack.data.preferences.UserPreferencesState
@@ -471,7 +472,7 @@ fun MeScreen(
                         modifier = Modifier.weight(1f)
                     )
                     Text(
-                        text = "v1.0",
+                        text = "v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
