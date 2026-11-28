@@ -139,7 +139,7 @@ fun HomeScreen(
                     contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 28.dp),
                     verticalArrangement = Arrangement.spacedBy(18.dp)
                 ) {
-                    // Exact Figma Header
+                    // Header
                     item(key = "home_header", contentType = "header") {
                         HomeHeaderSection(
                             dynamicMessage = uiState.dynamicMessage,
@@ -150,12 +150,12 @@ fun HomeScreen(
                         )
                     }
 
-                    // Exact Figma Hero Focus Card
+                    // Focus hero card
                     item(key = "today_focus_card", contentType = "hero_card") {
                         TodayFocusCard(uiState = uiState)
                     }
 
-                    // Exact Figma Weekly Goal Section
+                    // Weekly goal section
                     item(key = "weekly_goal_section", contentType = "weekly_goal") {
                         WeeklyGoalSection(uiState = uiState)
                     }
@@ -395,7 +395,7 @@ private fun FirstStudyPlanCard(
     onAddSubjectClick: () -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
-        // Exact Figma `24:400` Study plan introduction dark green card with 96.dp centered book icon
+        // Study plan introduction card with centered book icon
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(28.dp),
@@ -445,7 +445,7 @@ private fun FirstStudyPlanCard(
             )
         }
 
-        // Exact Figma `24:406` Getting started steps card
+        // Getting started steps card
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(20.dp),
@@ -644,7 +644,7 @@ private fun FigmaSubjectCard(
                 .padding(14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Exact Figma 48dp pastel icon box (15dp radius)
+            // Pastel icon box for subject
             Box(
                 modifier = Modifier
                     .size(48.dp)

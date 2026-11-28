@@ -66,7 +66,7 @@ import com.example.edutrack.ui.viewmodel.SubjectFormState
 import com.example.edutrack.util.DateTimeUtils
 
 /**
- * Exact Figma `15:61` ("EduTrack · Add subject and schedule") screen supporting
+ * Add/Edit subject and schedule screen supporting
  * daily goal hours/minutes, start date, repeat mode (Once / Every day / Custom days),
  * and 7-day interactive weekday chips.
  */

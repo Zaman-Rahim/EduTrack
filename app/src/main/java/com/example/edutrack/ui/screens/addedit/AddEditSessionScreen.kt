@@ -96,7 +96,7 @@ fun AddEditSessionScreen(
             .padding(horizontal = 24.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Exact Figma Header: 42dp circular back button + Title
+        // Header: 42dp circular back button + Title
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp)
@@ -304,7 +304,7 @@ fun AddEditSessionScreen(
             }
         }
 
-        // Date field using exact Figma calendar + down icons
+        // Date selection field
         val dateInteractionSource = remember { MutableInteractionSource() }
         LaunchedEffect(dateInteractionSource) {
             dateInteractionSource.interactions.collect { interaction ->

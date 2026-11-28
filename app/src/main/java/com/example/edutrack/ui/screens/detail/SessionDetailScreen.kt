@@ -124,7 +124,7 @@ fun SessionDetailScreen(
             .padding(horizontal = 24.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
-        // Exact Figma Header with circular back button
+        // Header with circular back button
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp)
@@ -140,7 +140,7 @@ fun SessionDetailScreen(
             )
         }
 
-        // Exact Figma Hero Card (rounded 26dp, full pastel tint, white 48dp square icon + Logged pill)
+        // Session hero card with pastel tint and logged status
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(26.dp),

@@ -809,7 +809,7 @@ fun EduTrackNavHost(
             )
         }
 
-        // YouTube-style smooth full-screen vertical overlay for Focus Timer & Focus Complete
+        // Full-screen vertical overlay for Focus Timer & Focus Complete
         FocusTimerOverlayHost(
             focusTimerManager = focusTimerManager,
             isVisible = isTimerExpanded,

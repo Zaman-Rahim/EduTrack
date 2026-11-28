@@ -66,7 +66,7 @@ private enum class ReminderDetailStep {
 }
 
 /**
- * Exact Figma `24:55` ("Reminder details"), `24:85` ("Snooze reminder"),
+ * Reminder details and snooze reminder screens,
  * and `24:95` ("Delete reminder?").
  */
 @Composable
@@ -230,7 +230,7 @@ private fun ReminderDetailMainView(
             )
         }
 
-        // Exact Figma `24:55` Dark green UP NEXT hero card
+        // UP NEXT reminder hero card
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(22.dp),
@@ -395,7 +395,7 @@ private fun ReminderDetailMainView(
 }
 
 /**
- * Exact Figma `24:85` ("EduTrack · Snooze reminder").
+ * Snooze reminder dialog.
  */
 @Composable
 private fun SnoozeReminderView(
@@ -514,7 +514,7 @@ private fun SnoozeReminderView(
 }
 
 /**
- * Exact Figma `24:95` ("EduTrack · Delete reminder?").
+ * Delete reminder confirmation dialog.
  */
 @Composable
 private fun DeleteReminderConfirmView(

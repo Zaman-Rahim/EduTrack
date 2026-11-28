@@ -48,7 +48,7 @@ private val notificationTimeFormatter: DateTimeFormatter =
     DateTimeFormatter.ofPattern("dd MMM · h:mm a", Locale.getDefault())
 
 /**
- * Exact Figma `24:35` ("EduTrack · Notifications") inbox showing completed focus goals and reminder alerts.
+ * Notifications inbox showing completed focus goals and reminder alerts.
  */
 @Composable
 fun NotificationsScreen(

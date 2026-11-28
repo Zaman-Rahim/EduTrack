@@ -72,7 +72,7 @@ fun SubjectManagerScreen(
             contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 96.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Exact Figma Header with Bell + Me on top right
+            // Header with Bell + Me on top right
             item(key = "subjects_header", contentType = "header") {
                 Row(
                     modifier = Modifier.fillMaxWidth(),

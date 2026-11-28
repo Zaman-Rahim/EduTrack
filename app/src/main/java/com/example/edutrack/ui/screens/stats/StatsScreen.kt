@@ -76,7 +76,7 @@ fun StatsScreen(
         contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 28.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Exact Figma Header
+        // Header
         item(key = "stats_header", contentType = "header") {
             Row(
                 modifier = Modifier.fillMaxWidth(),

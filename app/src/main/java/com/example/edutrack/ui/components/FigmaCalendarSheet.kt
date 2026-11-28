@@ -60,7 +60,7 @@ import java.util.Locale
 import kotlinx.coroutines.launch
 
 /**
- * Exact Figma `24:1179` / `24:1189` Calendar & Time Picker view.
+ * Calendar & Time Picker view.
  * Tapping any of the 3 Time cards (Hour / Minute / AM-PM) opens the iPhone-style
  * vertical scroll wheel picker [WheelTimePickerDialog].
  */

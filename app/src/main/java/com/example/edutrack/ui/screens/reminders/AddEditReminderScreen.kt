@@ -78,7 +78,7 @@ private enum class ReminderEditorStep {
 }
 
 /**
- * Exact Figma `24:45` ("Reminder editor"), `24:65` ("Date & time"),
+ * Reminder editor and date & time configuration screen,
  * `24:1179` ("Custom date & time Calendar"), and `24:75` ("Repeat reminder").
  */
 @Composable
@@ -643,7 +643,7 @@ private fun ReminderEditorMainView(
 }
 
 /**
- * Exact Figma `24:75` ("EduTrack · Repeat reminder") screen with presets and custom weekdays.
+ * Repeat reminder screen with presets and custom weekdays.
  */
 @Composable
 private fun ReminderRepeatPickerView(

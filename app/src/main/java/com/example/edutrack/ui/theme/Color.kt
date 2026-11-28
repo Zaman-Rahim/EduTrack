@@ -18,12 +18,12 @@ val CardLightGreen = Color(0xFFEAF0E7)
 val ChartGridGreen = Color(0xFF3B6658)
 val ChartMutedBarGreen = Color(0xFF82A38C)
 
-// Soft Pastel Accent Palette for Subjects & Cards (Exact Figma Swatches)
+// Soft Pastel Accent Palette for Subjects & Cards
 val PastelLavender = Color(0xFFE9E2F7)
 val PastelPeach = Color(0xFFF7E8D5)
 val PastelTeal = Color(0xFFDCEBF2)
 
-// Destructive / Warning actions (Exact Figma Session Details Delete Pill)
+// Destructive / Warning actions
 val DeleteRedBg = Color(0xFFF9E7E2)
 val DeleteRedText = Color(0xFFA14336)
 val DeleteRedBgDark = Color(0xFF42221F)

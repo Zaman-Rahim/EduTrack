@@ -66,7 +66,7 @@ import com.example.edutrack.util.DateTimeUtils
 import kotlinx.coroutines.launch
 
 /**
- * Exact Figma `19:175` ("Focus timer") & `19:205` ("Focus complete") screen.
+ * Focus timer and focus complete screen.
  * Includes the top-left Down Arrow (`ic_figma_down_arrow`) to minimize into the bottom Live Focus Bar.
  */
 @Composable
@@ -412,7 +412,7 @@ private fun FocusCompleteView(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Notification Banner Card matching Figma 24:592
+            // Notification banner card
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(20.dp),

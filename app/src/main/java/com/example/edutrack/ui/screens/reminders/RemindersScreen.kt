@@ -137,7 +137,7 @@ fun RemindersScreen(
             }
         }
 
-        // Exact Figma Lime "+ Add reminder" CTA
+        // Add reminder action button
         item(key = "add_cta", contentType = "add_cta") {
             ClayButton(
                 onClick = onAddReminderClick,
@@ -155,7 +155,7 @@ fun RemindersScreen(
             }
         }
 
-        // 3-Way Segmented Filter Bar (Today | Upcoming | Completed (N)) matching Figma 24:25
+        // Segmented filter bar (Today | Upcoming | Completed)
         item(key = "filter_bar", contentType = "filter_bar") {
             val tabs = ReminderTabFilter.entries
             val options = tabs.map { tab ->

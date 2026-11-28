@@ -32,7 +32,7 @@ EduTrack 2.0 is a complete reimagining based on the Figma design system, rebuilt
 - ⏱️ **Live Focus Timer & Background Service:**
   - Foreground service with notification controls to keep countdowns alive when minimized.
   - Interactive **Live Focus Bar** floating above navigation with live countdown and one-tap controls.
-  - YouTube-style fluid vertical modal presentation with smooth deceleration curves.
+  - Fluid vertical modal presentation with smooth deceleration curves.
   - **Multi-Subject Guard:** Prevents overlapping sessions and seamlessly prompts users to switch or pause.
   - **Auto-completion screen:** Instantly surfaces the celebration & completion view when the timer reaches `00:00` with ringtone chime.
 - 🎨 **Figma Clay UI System:**

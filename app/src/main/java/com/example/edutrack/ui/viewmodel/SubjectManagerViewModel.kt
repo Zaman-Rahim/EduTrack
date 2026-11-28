@@ -32,7 +32,7 @@ data class SubjectItemUi(
 )
 
 /**
- * Form state for Add/Edit Subject & Schedule screen (`15:61`).
+ * Form state for Add/Edit Subject & Schedule screen.
  */
 data class SubjectFormState(
     val editingSubjectId: Long? = null,

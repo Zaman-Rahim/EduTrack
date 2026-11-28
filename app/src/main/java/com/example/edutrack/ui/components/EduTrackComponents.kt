@@ -685,7 +685,7 @@ private fun formatCountdownTime(totalSeconds: Int): String {
 }
 
 /**
- * Exact Figma `47:62` Uber/Foodpanda-style persistent bottom Live Focus Bar when timer is minimized.
+ * Persistent bottom Live Focus Bar when timer is minimized.
  * Supports horizontal swipe left or right to slide off-screen and dismiss.
  */
 @Composable

@@ -94,7 +94,7 @@ private enum class SoundToneTarget(val title: String, val defaultFilter: SystemT
 }
 
 /**
- * Exact Figma `19:129` ("EduTrack · Me") personal learning space, study preferences,
+ * Personal learning space, study preferences,
  * timer sound & reminder settings, theme switch, and About EduTrack dialog.
  */
 @Composable
@@ -579,7 +579,7 @@ fun MeScreen(
                 }
             )
         } else {
-            // Exact Figma `19:215` Study reminder preset dialog
+            // Study reminder preset dialog
             Dialog(
                 onDismissRequest = { showReminderTimePicker = false }
             ) {
@@ -1092,7 +1092,7 @@ fun MeScreen(
     }
 
     if (showAboutDialog) {
-        // Exact Figma `19:216` About EduTrack sheet/dialog
+        // About EduTrack sheet/dialog
         Dialog(
             onDismissRequest = { showAboutDialog = false }
         ) {
