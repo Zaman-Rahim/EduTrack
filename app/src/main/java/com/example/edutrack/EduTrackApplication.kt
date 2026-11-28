@@ -14,9 +14,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
-/**
- * Manual dependency container scoped to the application lifecycle.
- */
+
 class AppContainer(application: Application) {
     private val database: EduTrackDatabase by lazy {
         EduTrackDatabase.getInstance(application)
